@@ -1,0 +1,2 @@
+# This Ionic/Angular project manages dependencies in package.json.
+# Install them with: npm install
