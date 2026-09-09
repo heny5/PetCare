@@ -3,7 +3,9 @@
 // The list of file replacements can be found in `angular.json`.
 
 export const environment = {
-  production: false
+  production: false,
+  // Reemplaza esta ruta por la URL de la API de PetCare si se aloja en otro dominio.
+  apiUrl: '/api/care-records',
 };
 
 /*
