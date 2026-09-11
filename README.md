@@ -11,10 +11,28 @@ Aplicacion Ionic/Angular para registrar cuidados de mascotas con soporte de cone
 
 ~~~powershell
 cd C:\Users\sting\Desktop\clone\PetCare
-npx ng serve
+npm start
 ~~~
 
-Abre [http://localhost:4200](http://localhost:4200) en el navegador.
+Abre [http://localhost:4200](http://localhost:4200) en el navegador. `npm start` inicia la app en el puerto 4200 y la API local en el puerto 3000. La terminal debe mostrar ambos procesos en ejecución.
+
+### Ejecutar los procesos por separado
+
+Si ya tienes Angular ejecutándose o necesitas revisar la API por separado, usa dos terminales dentro de la carpeta del proyecto:
+
+Terminal 1:
+
+~~~powershell
+npm run start:app
+~~~
+
+Terminal 2:
+
+~~~powershell
+npm run server
+~~~
+
+La segunda terminal debe mostrar `PetCare API ready at http://localhost:3000`. No cierres esa terminal mientras pruebas la sincronización.
 
 ## Etapa 1: Detector de Estado de Red
 
@@ -76,23 +94,39 @@ La pantalla principal muestra:
 
 ## Configuracion del servidor
 
-El endpoint actual es:
+En desarrollo, el endpoint es:
 
 ~~~ts
-apiUrl: '/api/care-records'
+apiUrl: 'http://localhost:3000/api/care-records'
 ~~~
 
-Si el backend esta en otro dominio, actualiza `apiUrl` en ambos archivos de entorno.
+Produccion mantiene la ruta relativa `/api/care-records`, que debe ser atendida por el backend desplegado. Si el backend esta en otro dominio, actualiza `apiUrl` en produccion.
 
-## Probar el modo offline
+### Verificar la API local
 
-1. Ejecuta la aplicacion.
-2. Abre las herramientas del navegador con `F12`.
-3. Ve a la pestana **Network**.
-4. Activa **Offline**.
-5. Registra un cuidado: aparecera el aviso offline y aumentara el contador de pendientes.
-6. Desactiva **Offline**: la aplicacion intentara sincronizar la cola automaticamente.
-7. En DevTools, ve a **Application > Local Storage** para consultar la clave `petcare.pending-care-records`.
+Con `npm run server` en ejecución, puedes confirmar que la API responde:
+
+~~~powershell
+Invoke-WebRequest -UseBasicParsing http://localhost:3000/health
+~~~
+
+La respuesta debe ser `200` con el contenido `{"status":"ok"}`. Los registros aceptados por la API local se guardan en `data/care-records.json`; ese archivo es solo para desarrollo y está ignorado por Git.
+
+## Probar el modo offline y la sincronización
+
+1. Inicia la app y confirma que la API local está encendida.
+2. Abre DevTools con `F12` y entra en la pestaña **Network**.
+3. En el desplegable que normalmente dice **No throttling**, selecciona **Offline**.
+4. Registra un cuidado. Verás el aviso offline y aumentará el contador de pendientes.
+5. En el mismo desplegable, vuelve a seleccionar **No throttling**.
+6. La app intenta sincronizar inmediatamente. Si la API todavía no responde, conserva la cola y reintenta cada 15 segundos hasta recibir una respuesta correcta.
+7. Cuando termine, el contador de pendientes desaparece. Puedes revisar la cola en **Application > Local Storage** con la clave `petcare.pending-care-records`.
+
+### Solución de problemas
+
+- **`net::ERR_CONNECTION_REFUSED` en `care-records`:** el navegador volvió a estar online, pero la API local no está ejecutándose. Abre otra terminal en el proyecto y ejecuta `npm run server`; espera el mensaje `PetCare API ready at http://localhost:3000`. La cola se reintentará automáticamente.
+- **El contador sigue visible:** comprueba `http://localhost:3000/health`, verifica que DevTools esté en **No throttling** y espera hasta 15 segundos tras encender la API.
+- **El puerto 4200 o 3000 ya está en uso:** cierra el proceso anterior que ocupa el puerto y vuelve a ejecutar `npm start`, o inicia los procesos por separado.
 
 ## Validacion
 
