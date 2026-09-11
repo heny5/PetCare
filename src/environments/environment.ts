@@ -4,8 +4,8 @@
 
 export const environment = {
   production: false,
-  // Reemplaza esta ruta por la URL de la API de PetCare si se aloja en otro dominio.
-  apiUrl: '/api/care-records',
+  // API local para desarrollo. Ejecuta `npm run server` antes de iniciar la app.
+  apiUrl: 'http://localhost:3000/api/care-records',
 };
 
 /*

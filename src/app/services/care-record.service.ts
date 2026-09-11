@@ -19,17 +19,20 @@ export type SaveResult = 'sent' | 'queued';
 @Injectable({ providedIn: 'root' })
 export class CareRecordService {
   private static readonly queueKey = 'petcare.pending-care-records';
+  private static readonly retryDelayMs = 15_000;
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
 
   readonly pendingCount = signal(this.readQueue().length);
   readonly isSynchronizing = signal(false);
+  readonly syncError = signal(false);
 
   constructor(private readonly connectivity: ConnectivityService) {
     if (typeof window !== 'undefined') {
-      window.addEventListener('online', () => void this.syncPending());
+      window.addEventListener('online', () => this.requestSync());
     }
 
     if (this.connectivity.isOnline()) {
-      void this.syncPending();
+      this.requestSync();
     }
   }
 
@@ -47,9 +50,11 @@ export class CareRecordService {
 
     try {
       await this.sendToServer(entry);
+      this.requestSync();
       return 'sent';
     } catch {
       this.enqueue(entry);
+      this.scheduleRetry();
       return 'queued';
     }
   }
@@ -66,26 +71,40 @@ export class CareRecordService {
 
     this.isSynchronizing.set(true);
     try {
+      const sentIds = new Set<string>();
       for (let index = 0; index < queue.length; index += 1) {
         try {
           await this.sendToServer(queue[index]);
+          sentIds.add(queue[index].id);
         } catch {
-          this.writeQueue(queue.slice(index));
-          return;
+          this.syncError.set(true);
+          break;
         }
       }
-      this.writeQueue([]);
+      const remaining = this.readQueue().filter((entry) => !sentIds.has(entry.id));
+      this.writeQueue(remaining);
+      this.syncError.set(remaining.length > 0);
     } finally {
       this.isSynchronizing.set(false);
+      this.scheduleRetry();
     }
   }
 
   private async sendToServer(record: CareRecord): Promise<void> {
-    const response = await fetch(environment.apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(record),
-    });
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    let response: Response;
+
+    try {
+      response = await fetch(environment.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record),
+        signal: controller.signal,
+      });
+    } finally {
+      window.clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       throw new Error(`The server rejected the care record (${response.status}).`);
@@ -110,5 +129,33 @@ export class CareRecordService {
   private writeQueue(queue: PendingCareRecord[]): void {
     localStorage.setItem(CareRecordService.queueKey, JSON.stringify(queue));
     this.pendingCount.set(queue.length);
+  }
+
+  /**
+   * The browser online event can occur before the API is reachable, and it
+   * does not occur when only the local API is restarted.
+   */
+  private requestSync(): void {
+    this.clearRetry();
+    void this.syncPending();
+  }
+
+  private scheduleRetry(): void {
+    this.clearRetry();
+    if (!this.connectivity.isOnline() || !this.readQueue().length || this.isSynchronizing()) {
+      return;
+    }
+
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      void this.syncPending();
+    }, CareRecordService.retryDelayMs);
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer !== undefined) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = undefined;
+    }
   }
 }

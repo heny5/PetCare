@@ -25,6 +25,12 @@
       </ion-note>
     }
 
+    @if (careRecords.isSynchronizing()) {
+      <ion-note color="primary" class="pending-note">Sincronizando registros pendientes...</ion-note>
+    } @else if (careRecords.syncError()) {
+      <ion-note color="warning" class="pending-note">No se pudo sincronizar aun. Se reintentara automaticamente.</ion-note>
+    }
+
     <h2>Registrar cuidado</h2>
     <ion-item>
       <ion-input label="Nombre de la mascota" labelPlacement="stacked" [(ngModel)]="petName" name="petName" placeholder="Ej.: Luna"></ion-input>
