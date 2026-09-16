@@ -1,20 +1,48 @@
 <ion-header [translucent]="true">
   <ion-toolbar>
-    <ion-title>
-      Blank
-    </ion-title>
+    <ion-title>PetCare</ion-title>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
   <ion-header collapse="condense">
     <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
+      <ion-title size="large">PetCare</ion-title>
     </ion-toolbar>
   </ion-header>
 
-  <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>Start with Ionic <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a></p>
+  <div id="container" class="care-form">
+    @if (!connectivity.isOnline()) {
+      <div class="offline-notice" role="status">
+        <strong>Est&aacute;s en modo offline</strong>
+        <span>Los cuidados que registres se guardar&aacute;n de forma segura y se enviar&aacute;n autom&aacute;ticamente cuando vuelva la conexi&oacute;n.</span>
+      </div>
+    }
+
+    @if (careRecords.pendingCount() > 0) {
+      <ion-note color="medium" class="pending-note">
+        {{ careRecords.pendingCount() }} registro(s) pendiente(s) de sincronizaci&oacute;n
+      </ion-note>
+    }
+
+    @if (careRecords.isSynchronizing()) {
+      <ion-note color="primary" class="pending-note">Sincronizando registros pendientes...</ion-note>
+    } @else if (careRecords.syncError()) {
+      <ion-note color="warning" class="pending-note">No se pudo sincronizar aun. Se reintentara automaticamente.</ion-note>
+    }
+
+    <h2>Registrar cuidado</h2>
+    <ion-item>
+      <ion-input label="Nombre de la mascota" labelPlacement="stacked" [(ngModel)]="petName" name="petName" placeholder="Ej.: Luna"></ion-input>
+    </ion-item>
+    <ion-item>
+      <ion-textarea label="Cuidado realizado" labelPlacement="stacked" [(ngModel)]="description" name="description" placeholder="Ej.: Paseo y comida" [autoGrow]="true"></ion-textarea>
+    </ion-item>
+    <ion-button expand="block" (click)="saveCare()">
+      Guardar cuidado
+      @if (careRecords.pendingCount() > 0) {
+        <ion-badge color="light" class="queue-badge">{{ careRecords.pendingCount() }}</ion-badge>
+      }
+    </ion-button>
   </div>
 </ion-content>

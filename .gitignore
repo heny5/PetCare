@@ -28,6 +28,7 @@ log.txt
 /tmp
 /out-tsc
 /bazel-out
+/data/care-records.json
 
 # Node
 /node_modules

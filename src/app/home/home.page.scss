@@ -1,27 +1,43 @@
 #container {
-  text-align: center;
-
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  padding: 24px 16px;
+  max-width: 560px;
+  margin: 56px auto 0;
 }
 
-#container strong {
-  font-size: 20px;
-  line-height: 26px;
+.care-form h2 {
+  margin: 24px 0 16px;
+  font-size: 24px;
 }
 
-#container p {
-  font-size: 16px;
-  line-height: 22px;
-
-  color: #8c8c8c;
-
-  margin: 0;
+.care-form ion-item {
+  margin-bottom: 12px;
+  --border-radius: 10px;
 }
 
-#container a {
-  text-decoration: none;
+.care-form ion-button {
+  margin-top: 20px;
+}
+
+.offline-notice {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 12px;
+  color: #5d3d00;
+  background: #fff3cd;
+  line-height: 1.4;
+}
+
+.offline-notice span,
+.pending-note {
+  font-size: 14px;
+}
+
+.pending-note {
+  display: block;
+  margin-top: 12px;
+}
+
+.queue-badge {
+  margin-left: 8px;
 }
