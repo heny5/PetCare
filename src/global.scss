@@ -34,4 +34,10 @@
 
 /* @import "@ionic/angular/css/palettes/dark.always.css"; */
 /* @import "@ionic/angular/css/palettes/dark.class.css"; */
-@import '@ionic/angular/css/palettes/dark.system.css';
+/* La propuesta de PetCare utiliza una interfaz clara y consistente. */
+/* @import '@ionic/angular/css/palettes/dark.system.css'; */
+
+html,
+body {
+  background: #eef5f2;
+}

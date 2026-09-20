@@ -1,48 +1,237 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>PetCare</ion-title>
-  </ion-toolbar>
-</ion-header>
+<ion-content [fullscreen]="true" class="petcare-content">
+  <main class="app-shell">
+    <header class="topbar">
+      <button class="brand" type="button" (click)="abrir('inicio')" aria-label="Ir al inicio">
+        <span class="brand-mark">🐾</span>
+        <span><b>PetCare</b><small>Bienestar conectado</small></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Perfil">CM</button>
+    </header>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">PetCare</ion-title>
-    </ion-toolbar>
-  </ion-header>
-
-  <div id="container" class="care-form">
-    @if (!connectivity.isOnline()) {
-      <div class="offline-notice" role="status">
-        <strong>Est&aacute;s en modo offline</strong>
-        <span>Los cuidados que registres se guardar&aacute;n de forma segura y se enviar&aacute;n autom&aacute;ticamente cuando vuelva la conexi&oacute;n.</span>
+    <aside class="network-banner" [class.offline]="!enLinea">
+      <div>
+        <b>{{ enLinea ? '✓ Conectado a la red' : '⚠ Estás sin conexión a internet (Modo Offline)' }}</b>
+        <small>{{ pendientes.length }} {{ pendientes.length === 1 ? 'registro pendiente' : 'registros pendientes' }} de sincronización</small>
       </div>
-    }
+    </aside>
 
-    @if (careRecords.pendingCount() > 0) {
-      <ion-note color="medium" class="pending-note">
-        {{ careRecords.pendingCount() }} registro(s) pendiente(s) de sincronizaci&oacute;n
-      </ion-note>
-    }
+    <div class="demo-network">
+      <span><b>Modo demostración</b><small>Control manual para la presentación</small></span>
+      <button type="button" [class.selected]="modoDemostracion && enLinea" (click)="cambiarConexionDemo(true)">En línea</button>
+      <button type="button" class="offline-choice" [class.selected]="modoDemostracion && !enLinea" (click)="cambiarConexionDemo(false)">Offline</button>
+      <button type="button" [class.selected]="!modoDemostracion" (click)="usarEstadoReal()">Red real</button>
+    </div>
 
-    @if (careRecords.isSynchronizing()) {
-      <ion-note color="primary" class="pending-note">Sincronizando registros pendientes...</ion-note>
-    } @else if (careRecords.syncError()) {
-      <ion-note color="warning" class="pending-note">No se pudo sincronizar aun. Se reintentara automaticamente.</ion-note>
-    }
+    @switch (vista) {
+      @case ('inicio') {
+        <section class="page">
+          <div class="hero">
+            <div>
+              <span class="eyebrow">Hola, Carlos</span>
+              <h1>Todo el cuidado de tu mascota, en un solo lugar.</h1>
+              <p>Consulta su estado, identifica su collar y revisa su historial.</p>
+              <button class="primary" type="button" (click)="abrir('mascotas')">Ver mis mascotas</button>
+            </div>
+            <div class="hero-pet" aria-hidden="true">🐶</div>
+          </div>
 
-    <h2>Registrar cuidado</h2>
-    <ion-item>
-      <ion-input label="Nombre de la mascota" labelPlacement="stacked" [(ngModel)]="petName" name="petName" placeholder="Ej.: Luna"></ion-input>
-    </ion-item>
-    <ion-item>
-      <ion-textarea label="Cuidado realizado" labelPlacement="stacked" [(ngModel)]="description" name="description" placeholder="Ej.: Paseo y comida" [autoGrow]="true"></ion-textarea>
-    </ion-item>
-    <ion-button expand="block" (click)="saveCare()">
-      Guardar cuidado
-      @if (careRecords.pendingCount() > 0) {
-        <ion-badge color="light" class="queue-badge">{{ careRecords.pendingCount() }}</ion-badge>
+          <div class="section-title"><h2>Accesos rápidos</h2><span>4 servicios</span></div>
+          <div class="quick-grid">
+            <button class="quick-card mint" type="button" (click)="abrir('nfc')"><span>📱</span><b>Identificar</b><small>Leer etiqueta NFC</small></button>
+            <button class="quick-card blue" type="button" (click)="abrir('conectar')"><span>📡</span><b>Conectar</b><small>Vincular un collar</small></button>
+            <button class="quick-card amber" type="button" (click)="abrir('historial')"><span>📋</span><b>Historial</b><small>Actividad y cuidados</small></button>
+            <button class="quick-card violet" type="button" (click)="abrir('compartir')"><span>↗</span><b>Compartir</b><small>Enviar expediente</small></button>
+          </div>
+
+          <article class="pet-summary">
+            <div class="pet-photo">🐕</div>
+            <div class="grow"><small>Mascota principal</small><h3>Luna</h3><p>Beagle · 4 años</p></div>
+            <span class="status" [class.lost-status]="mascotaPerdida"><i></i> {{ mascotaPerdida ? 'Perdida' : 'Saludable' }}</span>
+          </article>
+          @if (!enLinea) {
+            <aside class="offline-card"><b>Estás en modo offline</b><p>Los cuidados que registres se guardarán de forma segura y se enviarán cuando vuelva la conexión.</p></aside>
+          }
+          <article class="sync-card">
+            <div class="sync-icon">☁</div>
+            <div class="grow">
+              <small>Sincronización fuera de línea</small>
+              <h3>{{ pendientes.length ? pendientes.length + ' cambio(s) por enviar' : 'Información protegida' }}</h3>
+              <p>Los registros se guardan en este dispositivo y se envían cuando vuelve internet.</p>
+            </div>
+            <button type="button" (click)="abrir('historial')">Registrar</button>
+          </article>
+          <button class="sync-now" type="button" (click)="sincronizarPendientes()" [disabled]="sincronizando">
+            {{ sincronizando ? 'SINCRONIZANDO…' : 'SINCRONIZAR AHORA' }}
+            @if (pendientes.length > 0) { <span>{{ pendientes.length }}</span> }
+          </button>
+          <article class="alert-summary" (click)="abrir('alertas')">
+            <span class="alert-bell">🔔</span><div class="grow"><small>Centro de alertas</small><h3>{{ alertasPendientes }} alertas pendientes</h3><p>Temperatura, batería, conexión y actividad.</p></div><span class="chevron">›</span>
+          </article>
+          @if (mensaje) { <div class="success">✓ {{ mensaje }}</div> }
+        </section>
       }
-    </ion-button>
-  </div>
+
+      @case ('mascotas') {
+        <section class="page">
+          <button class="back" type="button" (click)="abrir('inicio')">← Inicio</button>
+          <div class="page-heading"><div><span class="eyebrow">Perfil familiar</span><h1>Mis mascotas</h1></div><button class="circle" type="button">＋</button></div>
+          <article class="pet-card featured" (click)="abrir('detalle')">
+            <div class="pet-photo large">🐕</div><div class="grow"><h2>Luna</h2><p>Beagle · Hembra · 4 años</p><span class="tag">Vacunas al día</span></div><span class="chevron">›</span>
+          </article>
+          <article class="pet-card" (click)="abrir('detalle')">
+            <div class="pet-photo large cat">🐈</div><div class="grow"><h2>Milo</h2><p>Gato criollo · Macho · 2 años</p><span class="tag neutral">Próxima cita: 28 sep.</span></div><span class="chevron">›</span>
+          </article>
+          <div class="empty-note"><span>💡</span><p>Toca una mascota para consultar su ficha, conectividad e historial.</p></div>
+        </section>
+      }
+
+      @case ('detalle') {
+        <section class="page">
+          <button class="back" type="button" (click)="abrir('mascotas')">← Mis mascotas</button>
+          <div class="profile-cover" [class.lost-cover]="mascotaPerdida"><div class="pet-photo xlarge">🐕</div><h1>Luna</h1><p>Beagle · 4 años · 12.4 kg</p><span class="status white"><i></i> {{ mascotaPerdida ? 'Reportada como perdida' : 'Estado saludable' }}</span></div>
+          <article class="lost-panel" [class.active]="mascotaPerdida">
+            <span class="lost-icon">{{ mascotaPerdida ? '⚠' : '🛡️' }}</span>
+            <div class="grow">
+              <h3>{{ mascotaPerdida ? 'Modo mascota perdida activo' : 'Modo mascota perdida' }}</h3>
+              <p>{{ mascotaPerdida ? 'Activado: ' + fechaAlertaPerdida : 'Activa una ficha especial al leer la etiqueta NFC.' }}</p>
+            </div>
+            <button type="button" (click)="alternarMascotaPerdida()">{{ mascotaPerdida ? 'Marcar encontrada' : 'Activar' }}</button>
+          </article>
+          <div class="stats"><div><b>12.4 kg</b><small>Peso</small></div><div><b>Normal</b><small>Actividad</small></div><div><b>36.8 °C</b><small>Temperatura</small></div></div>
+          <h2 class="subheading">Información importante</h2>
+          <div class="info-list"><div><span>💉</span><p><b>Vacunas</b><small>Completas hasta junio de 2027</small></p></div><div><span>🩺</span><p><b>Última consulta</b><small>12 de agosto de 2026</small></p></div><div><span>📞</span><p><b>Contacto</b><small>Carlos · 809-555-0142</small></p></div></div>
+          <button class="primary wide" type="button" (click)="abrir('sensor')">Ver estado del sensor</button>
+          <button class="secondary wide spaced" type="button" (click)="abrir('alertas')">Abrir centro de alertas</button>
+        </section>
+      }
+
+      @case ('conectar') {
+        <section class="page centered-page">
+          <button class="back align-start" type="button" (click)="abrir('inicio')">← Inicio</button>
+          <div class="connection-art"><span class="wave w1"></span><span class="wave w2"></span><div>📡</div></div>
+          <span class="eyebrow">Simulación Bluetooth Low Energy</span><h1>Conectar dispositivo</h1>
+          <p class="lead">Simula la búsqueda y vinculación de un collar PetCare cercano.</p>
+          @if (!dispositivoEncontrado && !buscandoBluetooth) {
+            <button class="primary wide" type="button" (click)="buscarDispositivos()">BUSCAR DISPOSITIVOS</button>
+          }
+          @if (buscandoBluetooth) {
+            <div class="ble-state"><span class="spinner"></span><b>Buscando collar cercano…</b><small>Bluetooth LE activo</small></div>
+          }
+          @if (dispositivoEncontrado) {
+            <div class="device-row"><span class="device-icon">🐾</span><div class="grow"><b>Collar PetCare PC-01</b><small>{{ dispositivoConectado ? 'Conectado · Batería 78%' : 'Disponible · Señal fuerte' }}</small></div><span class="signal">▂▄▆</span></div>
+            @if (!dispositivoConectado) {
+              <button class="primary wide" type="button" (click)="conectar()">CONECTAR COLLAR</button>
+            } @else {
+              <button class="secondary wide" type="button" (click)="desconectar()">DESCONECTAR COLLAR</button>
+            }
+          }
+          @if (mensaje) { <div class="success">✓ {{ mensaje }}</div> }
+          @if (dispositivoConectado) { <button class="text-button" type="button" (click)="abrir('sensor')">Continuar al estado del sensor →</button> }
+        </section>
+      }
+
+      @case ('sensor') {
+        <section class="page">
+          <button class="back" type="button" (click)="abrir('detalle')">← Perfil de Luna</button>
+          <div class="page-heading"><div><span class="eyebrow">Collar PetCare PC-01</span><h1>Estado del sensor</h1></div><span class="live-dot" [class.sensor-offline]="!dispositivoConectado">{{ dispositivoConectado ? 'EN LÍNEA' : 'DESCONECTADO' }}</span></div>
+          <div class="sensor-main"><div class="ring"><div><b>36.8</b><small>°C</small></div></div><h2>Temperatura normal</h2><p>Última lectura: ahora</p></div>
+          <div class="metric-grid"><article><span>👣</span><b>4,286</b><small>Pasos de hoy</small></article><article><span>⚡</span><b>78%</b><small>Batería</small></article><article><span>📶</span><b>Fuerte</b><small>Señal</small></article><article><span>🕒</span><b>6 h 20 m</b><small>Descanso</small></article></div>
+          <button class="primary wide" type="button" (click)="abrir('alertas')">Ver centro de alertas ({{ alertasPendientes }})</button>
+          <button class="secondary wide" type="button" (click)="abrir('historial')">Consultar historial</button>
+        </section>
+      }
+
+      @case ('nfc') {
+        <section class="page centered-page">
+          <button class="back align-start" type="button" (click)="abrir('inicio')">← Inicio</button>
+          <div class="phone-art"><span class="nfc-waves">)))</span><span class="phone">📱</span><span class="tag-card">🐾</span></div>
+          <span class="eyebrow">Identificación rápida</span><h1>Escanear etiqueta NFC</h1>
+          <p class="lead">Acerca la parte posterior del teléfono a la etiqueta colocada en el collar.</p>
+          <button class="primary wide" type="button" (click)="simularNfc()">Simular lectura NFC</button>
+          @if (lecturaNfc) {
+            @if (mascotaPerdida) {
+              <article class="emergency-card">
+                <span class="emergency-label">⚠ MASCOTA PERDIDA</span><div class="pet-photo xlarge">🐕</div><h2>Luna necesita volver a casa</h2>
+                <p>Si encontraste a Luna, comunícate con Carlos. La lectura corresponde a la etiqueta PET-LUNA-001.</p>
+                <a href="tel:+18095550142">📞 LLAMAR AL 809-555-0142</a>
+                <button type="button" (click)="registrarHallazgo()">{{ hallazgoRegistrado ? '✓ Hallazgo registrado' : 'Registrar ubicación simulada' }}</button>
+                @if (hallazgoRegistrado) { <small>Ubicación: Santiago, República Dominicana · Fecha y hora actuales</small> }
+              </article>
+            } @else {
+              <article class="nfc-result"><div class="pet-photo">🐕</div><div class="grow"><small>Etiqueta PET-LUNA-001</small><h3>Luna</h3><p>Contacto: Carlos · 809-555-0142</p></div><button type="button" (click)="abrir('detalle')">Ver ficha</button></article>
+            }
+          } @else { <p class="helper">La lectura real se activará en la versión Android.</p> }
+        </section>
+      }
+
+      @case ('historial') {
+        <section class="page">
+          <button class="back" type="button" (click)="abrir('inicio')">← Inicio</button>
+          <div class="page-heading"><div><span class="eyebrow">Seguimiento de Luna</span><h1>Historial</h1></div><button class="filter" type="button">Este mes⌄</button></div>
+          @if (!enLinea) {
+            <aside class="offline-card"><b>Estás en modo offline</b><p>Los cuidados que registres se guardarán de forma segura y se enviarán automáticamente cuando vuelva la conexión.</p></aside>
+          }
+          <section class="care-form">
+            <small>{{ pendientes.length }} registro(s) pendiente(s) de sincronización</small><h2>Registrar cuidado</h2>
+            <label>Nombre de la mascota<input type="text" [(ngModel)]="nombreMascota" placeholder="Ej.: Luna"></label>
+            <label>Cuidado realizado<textarea [(ngModel)]="cuidadoRealizado" placeholder="Ej.: Paseo y comida"></textarea></label>
+            <button type="button" (click)="registrarControl()">GUARDAR CUIDADO @if (pendientes.length > 0) { <span>{{ pendientes.length }}</span> }</button>
+          </section>
+          <div class="timeline">
+            @if (pendientes.length > 0) {
+              @for (registro of pendientes; track registro.id) {
+                <article><span class="time-icon pending-icon">↻</span><div><small>Pendiente de sincronización</small><h3>{{ registro.tipo }}</h3><p>{{ registro.detalle }}</p></div></article>
+              }
+            }
+            <article><span class="time-icon green">✓</span><div><small>Hoy · 8:20 a. m.</small><h3>Lectura del sensor normal</h3><p>Temperatura 36.8 °C y actividad estable.</p></div></article>
+            <article><span class="time-icon blue">💉</span><div><small>12 de septiembre</small><h3>Vacuna registrada</h3><p>Refuerzo anual aplicado por la Dra. Pérez.</p></div></article>
+            <article><span class="time-icon amber">⚖</span><div><small>2 de septiembre</small><h3>Control de peso</h3><p>12.4 kg. Variación de +0.2 kg.</p></div></article>
+            <article><span class="time-icon violet">📱</span><div><small>28 de agosto</small><h3>Etiqueta NFC vinculada</h3><p>Identificador PET-LUNA-001.</p></div></article>
+          </div>
+          <button class="sync-now" type="button" (click)="sincronizarPendientes()" [disabled]="sincronizando">{{ sincronizando ? 'SINCRONIZANDO…' : 'SINCRONIZAR AHORA' }}</button>
+          @if (mensaje) { <div class="success">✓ {{ mensaje }}</div> }
+        </section>
+      }
+
+      @case ('alertas') {
+        <section class="page">
+          <button class="back" type="button" (click)="abrir('inicio')">← Inicio</button>
+          <div class="page-heading"><div><span class="eyebrow">Collar de Luna</span><h1>Centro de alertas</h1></div><span class="alert-count">{{ alertasPendientes }}</span></div>
+          <p class="lead-left">Supervisa temperatura, batería, conexión y cambios de actividad del collar.</p>
+          <div class="alerts-list">
+            @for (alerta of alertas; track alerta.id) {
+              <article [class]="'collar-alert ' + alerta.tipo" [class.reviewed]="alerta.revisada">
+                <span class="alert-icon">{{ alerta.tipo === 'critica' ? '🌡️' : alerta.tipo === 'advertencia' ? '⚠️' : '📊' }}</span>
+                <div class="grow"><small>{{ alerta.hora }}</small><h3>{{ alerta.titulo }}</h3><p>{{ alerta.detalle }}</p></div>
+                @if (!alerta.revisada) { <button type="button" (click)="revisarAlerta(alerta.id)">Revisar</button> } @else { <span class="reviewed-label">✓ Revisada</span> }
+              </article>
+            }
+          </div>
+          <button class="primary wide" type="button" (click)="crearAlertaPrueba()">Generar alerta de prueba</button>
+          <button class="secondary wide" type="button" (click)="abrir('historial')">Ver historial de Luna</button>
+          @if (mensaje) { <div class="success">✓ {{ mensaje }}</div> }
+        </section>
+      }
+
+      @case ('compartir') {
+        <section class="page centered-page">
+          <button class="back align-start" type="button" (click)="abrir('inicio')">← Inicio</button>
+          <div class="share-art">↗</div><span class="eyebrow">Transferencia local</span><h1>Compartir expediente</h1>
+          <p class="lead">Selecciona los datos de Luna que deseas enviar a otro dispositivo cercano.</p>
+          <div class="check-list"><label><input type="checkbox" checked> Datos generales</label><label><input type="checkbox" checked> Vacunas y consultas</label><label><input type="checkbox" checked> Historial del sensor</label><label><input type="checkbox"> Información de contacto</label></div>
+          <div class="privacy"><span>🔒</span><p><b>Envío protegido</b><small>La persona receptora deberá aceptar la transferencia.</small></p></div>
+          <button class="primary wide" type="button" (click)="compartir()">Buscar dispositivo cercano</button>
+          @if (mensaje) { <div class="success">✓ {{ mensaje }}</div> }
+          <p class="helper">Propuesta para Wi-Fi Direct en Android.</p>
+        </section>
+      }
+    }
+
+    <nav class="bottom-nav" aria-label="Navegación principal">
+      <button type="button" [class.active]="vista === 'inicio'" (click)="abrir('inicio')"><span>⌂</span>Inicio</button>
+      <button type="button" [class.active]="vista === 'mascotas' || vista === 'detalle'" (click)="abrir('mascotas')"><span>🐾</span>Mascotas</button>
+      <button type="button" [class.active]="vista === 'nfc'" (click)="abrir('nfc')"><span>◉</span>NFC</button>
+      <button type="button" [class.active]="vista === 'historial' || vista === 'alertas'" (click)="abrir('historial')"><span>▤</span>Historial</button>
+    </nav>
+  </main>
 </ion-content>
