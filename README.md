@@ -19,130 +19,88 @@ npm start
 
 Si clonaste el repositorio en otra ubicación, ajusta la ruta.
 
-Abre [http://localhost:4200](http://localhost:4200). `npm start` ejecuta `ng serve` y arranca únicamente la aplicación Angular. La pantalla actual utiliza un endpoint externo de demostración para sincronizar cuidados; no requiere iniciar la API local.
+Abre [http://localhost:4200](http://localhost:4200). `npm start` inicia Angular y la API local en el puerto 3000. Si ya tenías la aplicación ejecutándose con la configuración anterior, detén ese proceso y vuelve a ejecutar `npm start`.
 
-Los scripts `start:app` y `server` no están definidos en `package.json`. El archivo `dev.mjs` intenta ejecutar `start:app`, por lo que tampoco es un método de inicio operativo con la configuración actual.
+También puedes iniciar ambos procesos por separado, en dos terminales:
+
+~~~powershell
+npm run server
+npm run start:app
+~~~
 
 ## Estado de red
 
-La pantalla `HomePage` utiliza `Network.getStatus()` y el evento `networkStatusChange` de `@capacitor/network`.
+`ConnectivityService` comparte el estado entre la pantalla y la cola de sincronización. Utiliza los eventos del navegador y el estado de Capacitor recibido por `HomePage`.
 
-La aplicación inicia en **modo demostración**:
+- **Red real**: es el modo inicial cuando no existe una selección de demostración guardada. Envía los pendientes al recuperar conexión o al seleccionar este modo estando conectado.
+- **En línea**: simula conexión e intenta enviar los pendientes.
+- **Offline**: simula desconexión y conserva los registros localmente, aunque el navegador tenga internet.
 
-- **En línea**: simula el estado conectado e intenta enviar los registros pendientes.
-- **Offline**: simula el estado desconectado y permite guardar registros localmente.
-- **Red real**: utiliza el estado reportado por Capacitor y sus cambios posteriores.
-
-El modo demostración controla el estado mostrado y el inicio de los envíos; las peticiones HTTP siguen necesitando una conexión real. El estado de red reportado tampoco garantiza que el servidor responda.
+La selección de demostración se conserva al recargar. Seleccionar **Red real** elimina esa selección guardada. El modo demostración controla cuándo se intenta enviar; la API todavía debe estar accesible para completar un envío.
 
 ## Guardado y sincronización de cuidados
 
-El formulario de cuidados está en la vista de historial.
+El formulario del historial utiliza `CareRecordService`:
 
-1. El usuario introduce el nombre de la mascota y el cuidado realizado.
-2. La pantalla crea el registro y lo guarda primero en la cola local.
-3. Si el estado de la pantalla es «en línea», intenta enviar los pendientes en orden mediante `POST` a `https://jsonplaceholder.typicode.com/posts`.
-4. Cuando una respuesta HTTP es correcta, elimina ese registro de la cola.
-5. Si un envío falla, conserva ese registro y los siguientes, y detiene el intento.
+1. Valida el nombre de la mascota y la descripción.
+2. Guarda el cuidado en la cola local **antes** de iniciar la petición.
+3. Cuando hay conexión, envía los pendientes en orden al endpoint de `environment.apiUrl`.
+4. Elimina cada pendiente únicamente después de una respuesta HTTP correcta.
+5. Si la API falla o tarda más de **10 segundos**, conserva los pendientes, muestra el error y libera el botón.
+6. Reintenta cada **15 segundos** mientras hay pendientes y conexión, además de sincronizar al recuperar la red y al pulsar **Sincronizar ahora**.
 
-La pantalla intenta sincronizar al guardar un cuidado estando en línea, al pulsar el botón de sincronización, al seleccionar **En línea** en modo demostración y al recibir un cambio de red conectado en modo real con registros pendientes.
+El contador, el botón y los mensajes se actualizan mediante signals, también cuando una petición termina sin otra interacción del usuario. Los envíos concurrentes comparten una sola operación de sincronización.
 
-Seleccionar **Red real** actualiza el estado mostrado, pero no inicia por sí solo una sincronización. La implementación de la pantalla no tiene reintentos periódicos cada 15 segundos.
+Los cuidados se guardan realmente en `data/care-records.json` mediante la API local. La pantalla ya no utiliza JSONPlaceholder. Los elementos de ejemplo del historial siguen siendo demostrativos; los cuidados enviados pueden consultarse en `GET /api/care-records`.
 
-El destino actual es un servidor de demostración. Un envío correcto desde esta pantalla no guarda el registro en la API local ni en `data/care-records.json`.
+### Persistencia y recuperación de pendientes
 
-### Persistencia local
+La cola está en `localStorage` bajo la clave `petcare.pending-care-records`. Contiene `id`, `petName`, `description`, `createdAt` y `queuedAt`.
 
-La cola utilizada por la pantalla se guarda en `localStorage` bajo la clave:
+Al iniciar, el servicio incorpora los pendientes del formato anterior (`petcare-pendientes`) a esta cola, conserva sus identificadores y evita duplicados por `id`. Solo elimina la copia anterior después de guardar la cola combinada. Si encuentra datos no convertibles o falla el almacenamiento, conserva esos datos y muestra un aviso.
 
-~~~text
-petcare-pendientes
-~~~
+Borrar los datos del sitio elimina la cola local. El proyecto no configura un service worker para garantizar la apertura o recarga de la web sin conexión.
 
-Cada registro contiene:
+## API local
 
-| Campo | Contenido |
-| --- | --- |
-| `id` | Identificador con formato `PET-` seguido de la marca de tiempo. |
-| `tipo` | Texto «Cuidado de» seguido del nombre de la mascota. |
-| `detalle` | Descripción del cuidado. |
-| `fecha` | Fecha de creación en formato ISO. |
-
-El cuerpo enviado añade `mascota: 'Luna'` y `aplicacion: 'PetCare'`; actualmente el campo `mascota` enviado está fijado en el código.
-
-Los pendientes se recuperan desde el almacenamiento del navegador al abrir la pantalla. Borrar los datos del sitio elimina esa cola. Este almacenamiento permite conservar registros mientras la aplicación está cargada; el proyecto no configura un service worker para garantizar que la aplicación web pueda abrirse o recargarse sin conexión.
-
-### Servicios adicionales presentes en el repositorio
-
-`ConnectivityService` y `CareRecordService` existen, pero no están integrados en la pantalla actual:
-
-- `ConnectivityService` utiliza `navigator.onLine` y los eventos `online` y `offline`, y expone la signal `isOnline`.
-- `CareRecordService` utiliza `environment.apiUrl`, guarda su propia cola en `petcare.pending-care-records` y programa reintentos a los 15 segundos mientras hay pendientes y el estado indica conexión.
-- Sus registros contienen `id`, `petName`, `description` y `createdAt`; la cola añade `queuedAt`.
-
-Estas características pertenecen a los servicios y no describen el flujo activo de `HomePage`.
-
-## API local opcional
-
-El repositorio incluye `server.mjs`, una API de desarrollo independiente. Para iniciarla, ejecuta en otra terminal desde la raíz del proyecto:
-
-~~~powershell
-node server.mjs
-~~~
-
-Por defecto muestra `PetCare API ready at http://localhost:3000`. El puerto puede cambiarse mediante la variable de entorno `PORT`.
+`npm start` inicia `server.mjs` automáticamente. Por defecto escucha en `http://localhost:3000`. El puerto puede cambiarse mediante `PORT`; si lo cambias, ajusta también `environment.apiUrl`.
 
 | Método y ruta | Función |
 | --- | --- |
-| `GET /health` | Responde con estado HTTP 200 y `{"status":"ok"}`. |
-| `GET /api/care-records` | Devuelve los registros guardados. |
-| `POST /api/care-records` | Recibe un registro con `id`, `petName`, `description` y `createdAt`, todos cadenas no vacías. |
+| `GET /health` | Devuelve `{"status":"ok"}`. |
+| `GET /api/care-records` | Devuelve los cuidados guardados. |
+| `POST /api/care-records` | Guarda un cuidado con `id`, `petName`, `description` y `createdAt`. |
 
-Los registros aceptados se guardan en `data/care-records.json`, archivo ignorado por Git. La API evita duplicados por `id`.
-
-Para comprobar que responde:
+Los registros aceptados se guardan en `data/care-records.json`, ignorado por Git. La API evita duplicados por `id`.
 
 ~~~powershell
 Invoke-WebRequest -UseBasicParsing http://localhost:3000/health
 ~~~
-
-### Configuración de los servicios
-
-Los archivos de entorno definen los endpoints utilizados por `CareRecordService`:
 
 | Entorno | `apiUrl` |
 | --- | --- |
 | Desarrollo | `http://localhost:3000/api/care-records` |
 | Producción | `/api/care-records` |
 
-La ruta de producción necesita un backend que la atienda. Cambiar estos valores no modifica el endpoint utilizado por `HomePage`, que está escrito directamente en la pantalla. Para conectar el formulario con la API local también es necesario adaptar los campos enviados o integrar `CareRecordService`.
+En producción debes servir esa ruta con un backend. En un dispositivo físico, `localhost` se refiere al propio dispositivo: configura la dirección accesible del equipo que ejecuta la API.
 
 ## Probar el modo offline
 
-### Con los controles de demostración
+1. Inicia la aplicación y la API con `npm start`.
+2. Pulsa **Offline**, abre el historial y guarda un cuidado.
+3. Comprueba que aparece pendiente y que no se envía todavía.
+4. Pulsa **En línea** o **Red real** con la API accesible.
+5. Comprueba que el contador llega a cero, el botón vuelve a estar disponible y aparece el mensaje de sincronización completada.
+6. Consulta `http://localhost:3000/api/care-records` para verificar el registro persistido.
 
-1. Inicia la aplicación con `npm start`.
-2. Pulsa **Offline** en la barra de demostración.
-3. Abre el historial, completa el formulario y guarda un cuidado.
-4. Comprueba el contador y la clave `petcare-pendientes` en **Application > Local Storage** de DevTools.
-5. Con conexión real disponible, pulsa **En línea**.
-6. Si el servidor de demostración responde correctamente, se eliminan los registros enviados y el contador llega a cero.
-
-### Con el estado real del navegador
-
-1. Pulsa **Red real** antes de probar la desconexión.
-2. En DevTools, abre **Network** y cambia **No throttling** a **Offline**.
-3. Registra un cuidado y comprueba que permanece en la cola local.
-4. Vuelve a **No throttling**. Cuando la pantalla reciba el cambio a conectado, intentará enviar los pendientes.
-5. Si el envío falla, comprueba la conexión y utiliza el botón de sincronización. No hay un temporizador de reintento en esta pantalla.
+Para comprobar los reintentos, inicia aplicación y API por separado, detén solo la API y guarda un cuidado estando en línea. El registro debe mantenerse pendiente. Reinicia la API: se enviará en un próximo reintento sin cambiar de red.
 
 ### Solución de problemas
 
-- **El aviso no cambia al desconectar la red:** selecciona **Red real**; el modo demostración mantiene el estado elegido manualmente.
-- **Los registros siguen pendientes:** revisa la petición a `jsonplaceholder.typicode.com/posts` en DevTools y vuelve a sincronizar cuando el destino esté disponible.
-- **La API local no recibe los cuidados:** la pantalla actual envía al servidor externo de demostración.
-- **`npm run server` o `npm run start:app` indica que falta el script:** utiliza `node server.mjs` para la API opcional y `npm start` para la aplicación.
-- **El puerto está ocupado:** detén el proceso que utiliza el puerto antes de volver a iniciar el componente correspondiente.
+- **El aviso no cambia al desconectar la red:** selecciona **Red real**.
+- **Los registros siguen pendientes:** comprueba `/health` y la petición a `/api/care-records` en DevTools; el indicador de conexión no garantiza que la API responda.
+- **La aplicación ya estaba abierta antes de esta corrección:** reinicia con `npm start` para arrancar también la API, o ejecuta `npm run server` en otra terminal.
+- **El puerto está ocupado:** detén el proceso anterior antes de volver a iniciar el mismo componente.
 
 ## Ubicación y funciones de demostración
 
@@ -154,16 +112,16 @@ En `HomePage`, la búsqueda y conexión Bluetooth, la lectura NFC y la preparaci
 
 | Archivo | Responsabilidad |
 | --- | --- |
-| `src/app/home/home.page.ts` | Estado de red, modo demostración, cola local y envíos utilizados por la pantalla. |
+| `src/app/home/home.page.ts` | Interfaz de cuidados conectada a los servicios de red y sincronización. |
 | `src/app/home/home.page.html` | Vistas, formulario, controles de conexión y contador. |
 | `src/app/home/home.page.scss` | Estilos de la pantalla principal. |
 | `src/app/location/location.page.ts` | Geolocalización, mapa y acción para compartir ubicación. |
 | `src/app/services/places.ts` | Consultas de ubicaciones y lugares cercanos. |
-| `src/app/services/connectivity.service.ts` | Servicio de conectividad separado de la pantalla actual. |
-| `src/app/services/care-record.service.ts` | Servicio de cola y sincronización separado de la pantalla actual. |
+| `src/app/services/connectivity.service.ts` | Estado compartido de red real y modo demostración. |
+| `src/app/services/care-record.service.ts` | Cola persistente, migración, timeout y reintentos de sincronización. |
 | `src/environments/environment.ts` | Endpoint de desarrollo para `CareRecordService`. |
 | `src/environments/environment.prod.ts` | Endpoint de producción para `CareRecordService`. |
-| `server.mjs` | API local opcional y persistencia en archivo JSON. |
+| `server.mjs` | API local y persistencia en archivo JSON. |
 
 ## Comandos de validación
 
@@ -174,4 +132,4 @@ npm test -- --watch=false
 npm run lint
 ~~~
 
-Estos comandos permiten comprobar la compilación de desarrollo, la compilación de producción, las pruebas y el análisis estático. Esta actualización de documentación se contrastó con el código y la configuración; no certifica que esos comandos se hayan ejecutado correctamente.
+Estos comandos permiten comprobar la compilación de desarrollo, la compilación de producción, las pruebas y el análisis estático. Las pruebas de cuidados verifican también la actualización visual sin interacciones adicionales, los fallos de red, la recuperación de pendientes y los reintentos.

@@ -825,7 +825,8 @@
 
             <button
               type="button"
-              (click)="registrarControl()">
+              (click)="registrarControl()"
+              [disabled]="guardando()">
               GUARDAR CUIDADO
 
               @if (pendientes.length > 0) {
@@ -935,8 +936,9 @@
           </button>
 
           @if (mensaje) {
-            <div class="success">
-              ✓ {{ mensaje }}
+            <div class="success" role="status"
+              [class.sync-error]="careRecords.syncError() || careRecords.migrationError()">
+              {{ careRecords.syncError() || careRecords.migrationError() ? '⚠' : '✓' }} {{ mensaje }}
             </div>
           }
         </section>
