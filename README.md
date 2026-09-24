@@ -1,133 +1,177 @@
 # PetCare
 
-Aplicacion Ionic/Angular para registrar cuidados de mascotas con soporte de conectividad y trabajo sin internet.
+Aplicación Ionic/Angular para registrar cuidados de mascotas, conservar registros pendientes en el navegador y demostrar su sincronización. Incluye una pantalla de ubicación y mapa, además de vistas de demostración para collar, sensores, NFC y alertas.
 
 ## Requisitos
 
-- Node.js y npm.
-- Dependencias instaladas con `npm install`.
+- Node.js compatible con Angular CLI 22.0.1: `^22.22.3 || ^24.15.0 || >=26.0.0`.
+- npm.
 
-## Ejecutar la aplicacion
+## Instalar y ejecutar
+
+Desde la carpeta del proyecto:
 
 ~~~powershell
-cd C:\Users\sting\Desktop\clone\PetCare
+cd C:\Users\sting\Desktop\veterinaria\PetCare
+npm install
 npm start
 ~~~
 
-Abre [http://localhost:4200](http://localhost:4200) en el navegador. `npm start` inicia la app en el puerto 4200 y la API local en el puerto 3000. La terminal debe mostrar ambos procesos en ejecución.
+Si clonaste el repositorio en otra ubicación, ajusta la ruta.
 
-### Ejecutar los procesos por separado
+Abre [http://localhost:4200](http://localhost:4200). `npm start` ejecuta `ng serve` y arranca únicamente la aplicación Angular. La pantalla actual utiliza un endpoint externo de demostración para sincronizar cuidados; no requiere iniciar la API local.
 
-Si ya tienes Angular ejecutándose o necesitas revisar la API por separado, usa dos terminales dentro de la carpeta del proyecto:
+Los scripts `start:app` y `server` no están definidos en `package.json`. El archivo `dev.mjs` intenta ejecutar `start:app`, por lo que tampoco es un método de inicio operativo con la configuración actual.
 
-Terminal 1:
+## Estado de red
 
-~~~powershell
-npm run start:app
-~~~
+La pantalla `HomePage` utiliza `Network.getStatus()` y el evento `networkStatusChange` de `@capacitor/network`.
 
-Terminal 2:
+La aplicación inicia en **modo demostración**:
 
-~~~powershell
-npm run server
-~~~
+- **En línea**: simula el estado conectado e intenta enviar los registros pendientes.
+- **Offline**: simula el estado desconectado y permite guardar registros localmente.
+- **Red real**: utiliza el estado reportado por Capacitor y sus cambios posteriores.
 
-La segunda terminal debe mostrar `PetCare API ready at http://localhost:3000`. No cierres esa terminal mientras pruebas la sincronización.
+El modo demostración controla el estado mostrado y el inicio de los envíos; las peticiones HTTP siguen necesitando una conexión real. El estado de red reportado tampoco garantiza que el servidor responda.
 
-## Etapa 1: Detector de Estado de Red
+## Guardado y sincronización de cuidados
 
-Esta etapa permite conocer si el dispositivo tiene conexion a internet.
+El formulario de cuidados está en la vista de historial.
 
-El servicio `ConnectivityService` usa `navigator.onLine` para conocer el estado inicial de la red y escucha los eventos del navegador:
+1. El usuario introduce el nombre de la mascota y el cuidado realizado.
+2. La pantalla crea el registro y lo guarda primero en la cola local.
+3. Si el estado de la pantalla es «en línea», intenta enviar los pendientes en orden mediante `POST` a `https://jsonplaceholder.typicode.com/posts`.
+4. Cuando una respuesta HTTP es correcta, elimina ese registro de la cola.
+5. Si un envío falla, conserva ese registro y los siguientes, y detiene el intento.
 
-- `online`: actualiza el estado cuando vuelve la conexion.
-- `offline`: actualiza el estado cuando se pierde la conexion.
+La pantalla intenta sincronizar al guardar un cuidado estando en línea, al pulsar el botón de sincronización, al seleccionar **En línea** en modo demostración y al recibir un cambio de red conectado en modo real con registros pendientes.
 
-El estado se expone como una signal reactiva, `isOnline`, para que la interfaz y los servicios reaccionen inmediatamente al cambio.
+Seleccionar **Red real** actualiza el estado mostrado, pero no inicia por sí solo una sincronización. La implementación de la pantalla no tiene reintentos periódicos cada 15 segundos.
 
-Archivo principal:
-
-- `src/app/services/connectivity.service.ts`
-
-## Etapa 2: Modo Offline Funcional
-
-Cuando no hay conexion, los cuidados registrados no se pierden. La aplicacion los guarda en el dispositivo y los envia automaticamente cuando la red vuelve.
-
-### Flujo de guardado
-
-1. El usuario registra el nombre de la mascota y el cuidado realizado.
-2. La pantalla consulta el estado de `ConnectivityService`.
-3. Si esta online, envia el registro mediante `POST` al endpoint configurado.
-4. Si esta offline, o si el envio falla, guarda el registro en una cola local.
-5. Al recuperar la conexion, la cola se sincroniza en el mismo orden en que fue creada.
+El destino actual es un servidor de demostración. Un envío correcto desde esta pantalla no guarda el registro en la API local ni en `data/care-records.json`.
 
 ### Persistencia local
 
-La cola usa `localStorage` con la clave:
+La cola utilizada por la pantalla se guarda en `localStorage` bajo la clave:
 
 ~~~text
-petcare.pending-care-records
+petcare-pendientes
 ~~~
 
-Cada registro conserva un identificador, el nombre de la mascota, la descripcion, la fecha de creacion y la fecha en que se agrego a la cola.
+Cada registro contiene:
 
-### Experiencia de usuario
-
-La pantalla principal muestra:
-
-- Un aviso visible cuando la aplicacion esta en modo offline.
-- Un contador de registros pendientes de sincronizacion.
-- Un mensaje al guardar un cuidado de forma sincronizada o local.
-- Un formulario para registrar cuidados.
-
-### Archivos principales
-
-| Archivo | Responsabilidad |
+| Campo | Contenido |
 | --- | --- |
-| `src/app/services/connectivity.service.ts` | Detecta los cambios de conexion. |
-| `src/app/services/care-record.service.ts` | Guarda, encola y sincroniza los cuidados. |
-| `src/app/home/home.page.ts` | Gestiona el formulario y los mensajes al usuario. |
-| `src/app/home/home.page.html` | Muestra el aviso offline, contador y formulario. |
-| `src/app/home/home.page.scss` | Define los estilos del modo offline. |
-| `src/environments/environment.ts` | Configura el endpoint en desarrollo. |
-| `src/environments/environment.prod.ts` | Configura el endpoint en produccion. |
+| `id` | Identificador con formato `PET-` seguido de la marca de tiempo. |
+| `tipo` | Texto «Cuidado de» seguido del nombre de la mascota. |
+| `detalle` | Descripción del cuidado. |
+| `fecha` | Fecha de creación en formato ISO. |
 
-## Configuracion del servidor
+El cuerpo enviado añade `mascota: 'Luna'` y `aplicacion: 'PetCare'`; actualmente el campo `mascota` enviado está fijado en el código.
 
-En desarrollo, el endpoint es:
+Los pendientes se recuperan desde el almacenamiento del navegador al abrir la pantalla. Borrar los datos del sitio elimina esa cola. Este almacenamiento permite conservar registros mientras la aplicación está cargada; el proyecto no configura un service worker para garantizar que la aplicación web pueda abrirse o recargarse sin conexión.
 
-~~~ts
-apiUrl: 'http://localhost:3000/api/care-records'
+### Servicios adicionales presentes en el repositorio
+
+`ConnectivityService` y `CareRecordService` existen, pero no están integrados en la pantalla actual:
+
+- `ConnectivityService` utiliza `navigator.onLine` y los eventos `online` y `offline`, y expone la signal `isOnline`.
+- `CareRecordService` utiliza `environment.apiUrl`, guarda su propia cola en `petcare.pending-care-records` y programa reintentos a los 15 segundos mientras hay pendientes y el estado indica conexión.
+- Sus registros contienen `id`, `petName`, `description` y `createdAt`; la cola añade `queuedAt`.
+
+Estas características pertenecen a los servicios y no describen el flujo activo de `HomePage`.
+
+## API local opcional
+
+El repositorio incluye `server.mjs`, una API de desarrollo independiente. Para iniciarla, ejecuta en otra terminal desde la raíz del proyecto:
+
+~~~powershell
+node server.mjs
 ~~~
 
-Produccion mantiene la ruta relativa `/api/care-records`, que debe ser atendida por el backend desplegado. Si el backend esta en otro dominio, actualiza `apiUrl` en produccion.
+Por defecto muestra `PetCare API ready at http://localhost:3000`. El puerto puede cambiarse mediante la variable de entorno `PORT`.
 
-### Verificar la API local
+| Método y ruta | Función |
+| --- | --- |
+| `GET /health` | Responde con estado HTTP 200 y `{"status":"ok"}`. |
+| `GET /api/care-records` | Devuelve los registros guardados. |
+| `POST /api/care-records` | Recibe un registro con `id`, `petName`, `description` y `createdAt`, todos cadenas no vacías. |
 
-Con `npm run server` en ejecución, puedes confirmar que la API responde:
+Los registros aceptados se guardan en `data/care-records.json`, archivo ignorado por Git. La API evita duplicados por `id`.
+
+Para comprobar que responde:
 
 ~~~powershell
 Invoke-WebRequest -UseBasicParsing http://localhost:3000/health
 ~~~
 
-La respuesta debe ser `200` con el contenido `{"status":"ok"}`. Los registros aceptados por la API local se guardan en `data/care-records.json`; ese archivo es solo para desarrollo y está ignorado por Git.
+### Configuración de los servicios
 
-## Probar el modo offline y la sincronización
+Los archivos de entorno definen los endpoints utilizados por `CareRecordService`:
 
-1. Inicia la app y confirma que la API local está encendida.
-2. Abre DevTools con `F12` y entra en la pestaña **Network**.
-3. En el desplegable que normalmente dice **No throttling**, selecciona **Offline**.
-4. Registra un cuidado. Verás el aviso offline y aumentará el contador de pendientes.
-5. En el mismo desplegable, vuelve a seleccionar **No throttling**.
-6. La app intenta sincronizar inmediatamente. Si la API todavía no responde, conserva la cola y reintenta cada 15 segundos hasta recibir una respuesta correcta.
-7. Cuando termine, el contador de pendientes desaparece. Puedes revisar la cola en **Application > Local Storage** con la clave `petcare.pending-care-records`.
+| Entorno | `apiUrl` |
+| --- | --- |
+| Desarrollo | `http://localhost:3000/api/care-records` |
+| Producción | `/api/care-records` |
+
+La ruta de producción necesita un backend que la atienda. Cambiar estos valores no modifica el endpoint utilizado por `HomePage`, que está escrito directamente en la pantalla. Para conectar el formulario con la API local también es necesario adaptar los campos enviados o integrar `CareRecordService`.
+
+## Probar el modo offline
+
+### Con los controles de demostración
+
+1. Inicia la aplicación con `npm start`.
+2. Pulsa **Offline** en la barra de demostración.
+3. Abre el historial, completa el formulario y guarda un cuidado.
+4. Comprueba el contador y la clave `petcare-pendientes` en **Application > Local Storage** de DevTools.
+5. Con conexión real disponible, pulsa **En línea**.
+6. Si el servidor de demostración responde correctamente, se eliminan los registros enviados y el contador llega a cero.
+
+### Con el estado real del navegador
+
+1. Pulsa **Red real** antes de probar la desconexión.
+2. En DevTools, abre **Network** y cambia **No throttling** a **Offline**.
+3. Registra un cuidado y comprueba que permanece en la cola local.
+4. Vuelve a **No throttling**. Cuando la pantalla reciba el cambio a conectado, intentará enviar los pendientes.
+5. Si el envío falla, comprueba la conexión y utiliza el botón de sincronización. No hay un temporizador de reintento en esta pantalla.
 
 ### Solución de problemas
 
-- **`net::ERR_CONNECTION_REFUSED` en `care-records`:** el navegador volvió a estar online, pero la API local no está ejecutándose. Abre otra terminal en el proyecto y ejecuta `npm run server`; espera el mensaje `PetCare API ready at http://localhost:3000`. La cola se reintentará automáticamente.
-- **El contador sigue visible:** comprueba `http://localhost:3000/health`, verifica que DevTools esté en **No throttling** y espera hasta 15 segundos tras encender la API.
-- **El puerto 4200 o 3000 ya está en uso:** cierra el proceso anterior que ocupa el puerto y vuelve a ejecutar `npm start`, o inicia los procesos por separado.
+- **El aviso no cambia al desconectar la red:** selecciona **Red real**; el modo demostración mantiene el estado elegido manualmente.
+- **Los registros siguen pendientes:** revisa la petición a `jsonplaceholder.typicode.com/posts` en DevTools y vuelve a sincronizar cuando el destino esté disponible.
+- **La API local no recibe los cuidados:** la pantalla actual envía al servidor externo de demostración.
+- **`npm run server` o `npm run start:app` indica que falta el script:** utiliza `node server.mjs` para la API opcional y `npm start` para la aplicación.
+- **El puerto está ocupado:** detén el proceso que utiliza el puerto antes de volver a iniciar el componente correspondiente.
 
-## Validacion
+## Ubicación y funciones de demostración
 
-La aplicacion fue compilada con Angular en configuracion de desarrollo sin errores de compilacion.
+La ruta `/location` incluye geolocalización mediante Capacitor, un mapa Leaflet con teselas de OpenStreetMap, búsqueda de ubicaciones mediante Nominatim, consulta de lugares cercanos mediante Overpass y una acción para compartir la ubicación con Capacitor Share. Su disponibilidad depende de los permisos y las capacidades del dispositivo; los recursos externos del mapa y las búsquedas requieren conexión.
+
+En `HomePage`, la búsqueda y conexión Bluetooth, la lectura NFC y la preparación del expediente para compartir son simulaciones de interfaz. Las alertas iniciales también son datos de demostración.
+
+## Archivos principales
+
+| Archivo | Responsabilidad |
+| --- | --- |
+| `src/app/home/home.page.ts` | Estado de red, modo demostración, cola local y envíos utilizados por la pantalla. |
+| `src/app/home/home.page.html` | Vistas, formulario, controles de conexión y contador. |
+| `src/app/home/home.page.scss` | Estilos de la pantalla principal. |
+| `src/app/location/location.page.ts` | Geolocalización, mapa y acción para compartir ubicación. |
+| `src/app/services/places.ts` | Consultas de ubicaciones y lugares cercanos. |
+| `src/app/services/connectivity.service.ts` | Servicio de conectividad separado de la pantalla actual. |
+| `src/app/services/care-record.service.ts` | Servicio de cola y sincronización separado de la pantalla actual. |
+| `src/environments/environment.ts` | Endpoint de desarrollo para `CareRecordService`. |
+| `src/environments/environment.prod.ts` | Endpoint de producción para `CareRecordService`. |
+| `server.mjs` | API local opcional y persistencia en archivo JSON. |
+
+## Comandos de validación
+
+~~~powershell
+npm run build -- --configuration development
+npm run build
+npm test -- --watch=false
+npm run lint
+~~~
+
+Estos comandos permiten comprobar la compilación de desarrollo, la compilación de producción, las pruebas y el análisis estático. Esta actualización de documentación se contrastó con el código y la configuración; no certifica que esos comandos se hayan ejecutado correctamente.
