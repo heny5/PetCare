@@ -5,11 +5,9 @@
   "homepage": "https://ionicframework.com/",
   "scripts": {
     "ng": "ng",
-    "start": "node dev.mjs",
-    "start:app": "ng serve",
+    "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "server": "node server.mjs",
     "test": "ng test",
     "lint": "ng lint"
   },
@@ -25,6 +23,7 @@
     "@capacitor/core": "8.5.1",
     "@capacitor/haptics": "8.0.2",
     "@capacitor/keyboard": "8.0.5",
+    "@capacitor/network": "^8.0.1",
     "@capacitor/status-bar": "8.0.3",
     "@ionic/angular": "^9.0.0",
     "ionicons": "^8.1.0",
