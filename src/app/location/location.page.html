@@ -1,0 +1,282 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/home"></ion-back-button>
+    </ion-buttons>
+
+    <ion-title>Localización</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <main class="location-container">
+    <section class="intro">
+      <span class="intro-badge">GPS Y MAPAS</span>
+
+      <h1>Servicios para mascotas</h1>
+
+      <p>
+        Consulta tu ubicación, compártela y encuentra
+        tiendas, alimentos y veterinarias cercanas.
+      </p>
+    </section>
+
+    <ion-card class="search-card">
+      <ion-card-content>
+        <h2>Buscar una ubicación</h2>
+
+        <div class="search-row">
+          <ion-searchbar
+            [(ngModel)]="searchText"
+            placeholder="Ejemplo: Tenares, República Dominicana"
+            [debounce]="300"
+            (keyup.enter)="searchLocation()">
+          </ion-searchbar>
+
+          <ion-button
+            (click)="searchLocation()"
+            [disabled]="
+              searching ||
+              searchText.trim().length < 3
+            ">
+
+            <ion-spinner
+              *ngIf="searching"
+              name="crescent">
+            </ion-spinner>
+
+            {{ searching ? 'Buscando…' : 'Buscar' }}
+          </ion-button>
+        </div>
+
+        <ion-list *ngIf="searchResults.length > 0">
+          <ion-item
+            button
+            detail
+            *ngFor="let result of searchResults"
+            (click)="selectSearchResult(result)">
+
+            <ion-label class="result-label">
+              {{ result.name }}
+            </ion-label>
+          </ion-item>
+        </ion-list>
+      </ion-card-content>
+    </ion-card>
+
+    <section class="map-section">
+      <div
+        id="location-map"
+        role="application"
+        aria-label="Mapa de ubicación">
+      </div>
+    </section>
+
+    <ion-card class="status-card">
+      <ion-card-content>
+        <div class="status-heading">
+          <div>
+            <small>ESTADO DEL GPS</small>
+            <p>{{ statusMessage }}</p>
+          </div>
+
+          <ion-chip
+            [color]="tracking ? 'success' : 'medium'">
+
+            <ion-label>
+              {{ tracking ? 'En tiempo real' : 'Detenido' }}
+            </ion-label>
+          </ion-chip>
+        </div>
+
+        <div
+          class="coordinates"
+          *ngIf="
+            latitude !== null &&
+            longitude !== null
+          ">
+
+          <div>
+            <span>Latitud</span>
+            <strong>
+              {{ latitude | number:'1.6-6' }}
+            </strong>
+          </div>
+
+          <div>
+            <span>Longitud</span>
+            <strong>
+              {{ longitude | number:'1.6-6' }}
+            </strong>
+          </div>
+
+          <div>
+            <span>Precisión</span>
+            <strong>
+              {{ accuracy | number:'1.0-1' }} metros
+            </strong>
+          </div>
+
+          <div>
+            <span>Actualización</span>
+            <strong>{{ lastUpdate }}</strong>
+          </div>
+        </div>
+
+        <ion-note *ngIf="latitude === null">
+          Todavía no se ha obtenido una ubicación.
+        </ion-note>
+
+        <div
+          class="error-message"
+          *ngIf="errorMessage">
+
+          {{ errorMessage }}
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <section class="actions">
+      <ion-button
+        expand="block"
+        (click)="getCurrentLocation()"
+        [disabled]="loading">
+
+        <ion-spinner
+          *ngIf="loading"
+          name="crescent">
+        </ion-spinner>
+
+        {{
+          loading
+            ? 'Buscando ubicación…'
+            : 'Obtener ubicación'
+        }}
+      </ion-button>
+
+      <ion-button
+        expand="block"
+        [color]="tracking ? 'danger' : 'success'"
+        (click)="toggleTracking()">
+
+        {{
+          tracking
+            ? 'Detener seguimiento'
+            : 'Seguimiento en tiempo real'
+        }}
+      </ion-button>
+
+      <ion-button
+        expand="block"
+        fill="outline"
+        (click)="shareLocation()"
+        [disabled]="latitude === null">
+
+        Compartir mi ubicación
+      </ion-button>
+    </section>
+
+    <ion-card class="nearby-card">
+      <ion-card-content>
+        <h2>Lugares cercanos para mascotas</h2>
+
+        <p class="section-description">
+          La búsqueda utiliza tu ubicación y muestra
+          sitios en un radio aproximado de
+          <strong>
+            {{ searchRadiusKm }}
+            {{
+              searchRadiusKm === 1
+                ? 'kilómetro'
+                : 'kilómetros'
+            }}
+          </strong>.
+        </p>
+
+        <ion-segment
+          [(ngModel)]="selectedCategory">
+
+          <ion-segment-button value="petStores">
+            <ion-label>Tiendas</ion-label>
+          </ion-segment-button>
+
+          <ion-segment-button value="petFood">
+            <ion-label>Alimentos</ion-label>
+          </ion-segment-button>
+
+          <ion-segment-button value="veterinary">
+            <ion-label>Veterinarias</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+
+        <div class="radius-control">
+          <div class="radius-heading">
+            <span>Radio de búsqueda</span>
+            <strong>{{ searchRadiusKm }} km</strong>
+          </div>
+
+          <ion-range
+            [(ngModel)]="searchRadiusKm"
+            [min]="1"
+            [max]="20"
+            [step]="1"
+            [snaps]="true"
+            [ticks]="true"
+            [pin]="true"
+            aria-label="Radio de búsqueda en kilómetros">
+
+            <ion-label slot="start">
+              1 km
+            </ion-label>
+
+            <ion-label slot="end">
+              20 km
+            </ion-label>
+          </ion-range>
+        </div>
+
+        <ion-button
+          class="nearby-button"
+          expand="block"
+          color="tertiary"
+          (click)="findNearbyPlaces()"
+          [disabled]="loadingPlaces">
+
+          <ion-spinner
+            *ngIf="loadingPlaces"
+            name="crescent">
+          </ion-spinner>
+
+          {{
+            loadingPlaces
+              ? 'Consultando lugares…'
+              : 'Buscar lugares cercanos'
+          }}
+        </ion-button>
+
+        <ion-list *ngIf="nearbyPlaces.length > 0">
+          <ion-item
+            button
+            detail
+            *ngFor="let place of nearbyPlaces"
+            (click)="focusPlace(place)">
+
+            <ion-label>
+              <h3>{{ place.name }}</h3>
+              <p>{{ place.categoryLabel }}</p>
+              <p>{{ place.address }}</p>
+            </ion-label>
+
+            <ion-note slot="end">
+              {{
+                place.distance |
+                number:'1.1-2'
+              }}
+              km
+            </ion-note>
+          </ion-item>
+        </ion-list>
+      </ion-card-content>
+    </ion-card>
+  </main>
+</ion-content>

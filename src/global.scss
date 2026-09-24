@@ -1,43 +1,42 @@
 /*
  * App Global CSS
  * ----------------------------------------------------------------------------
- * Put style rules here that you want to apply globally. These styles are for
- * the entire app and not just one component. Additionally, this file can be
- * used as an entry point to import other CSS/Sass files to be included in the
- * output CSS.
- * For more information on global stylesheets, visit the documentation:
- * https://ionicframework.com/docs/layout/global-stylesheets
+ * Estilos globales utilizados en toda la aplicación PetCare.
  */
 
-/* Core CSS required for Ionic components to work properly */
+/* Core CSS requerido para los componentes de Ionic */
 @import "@ionic/angular/css/core.css";
 
-/* Basic CSS for apps built with Ionic */
+/* CSS básico de Ionic */
 @import "@ionic/angular/css/normalize.css";
 @import "@ionic/angular/css/structure.css";
 @import "@ionic/angular/css/typography.css";
 @import "@ionic/angular/css/display.css";
 
-/* Optional CSS utils that can be commented out */
+/* Utilidades CSS de Ionic */
 @import "@ionic/angular/css/padding.css";
 @import "@ionic/angular/css/float-elements.css";
 @import "@ionic/angular/css/text-alignment.css";
 @import "@ionic/angular/css/text-transformation.css";
 @import "@ionic/angular/css/flex-utils.css";
 
-/**
- * Ionic Dark Mode
- * -----------------------------------------------------
- * For more info, please see:
- * https://ionicframework.com/docs/theming/dark-mode
- */
+/* Estilos oficiales del mapa Leaflet */
+@import "leaflet/dist/leaflet.css";
 
-/* @import "@ionic/angular/css/palettes/dark.always.css"; */
-/* @import "@ionic/angular/css/palettes/dark.class.css"; */
-/* La propuesta de PetCare utiliza una interfaz clara y consistente. */
-/* @import '@ionic/angular/css/palettes/dark.system.css'; */
-
+/* Fondo general de PetCare */
 html,
 body {
   background: #eef5f2;
+}
+
+/*
+ * Evita que otros estilos globales deformen
+ * los mosaicos que forman el mapa.
+ */
+.leaflet-container .leaflet-tile {
+  width: 256px !important;
+  height: 256px !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: fill !important;
 }
