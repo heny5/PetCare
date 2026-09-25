@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 
 const port = Number(process.env.PORT ?? 3000);
 const recordsFile = join(process.cwd(), 'data', 'care-records.json');
+const petsFile = join(process.cwd(), 'data', 'pets.json');
 const maxBodySize = 1_000_000;
 let recordWriteQueue = Promise.resolve();
 
@@ -18,9 +19,9 @@ function sendJson(response, statusCode, body) {
   response.end(JSON.stringify(body));
 }
 
-async function getRecords() {
+async function getRecords(file = recordsFile) {
   try {
-    const content = await readFile(recordsFile, 'utf8');
+    const content = await readFile(file, 'utf8');
     const records = JSON.parse(content);
     return Array.isArray(records) ? records : [];
   } catch (error) {
@@ -31,22 +32,22 @@ async function getRecords() {
   }
 }
 
-async function saveRecords(records) {
-  await mkdir(dirname(recordsFile), { recursive: true });
-  await writeFile(recordsFile, JSON.stringify(records, null, 2), 'utf8');
+async function saveRecords(records, file = recordsFile) {
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify(records, null, 2), 'utf8');
 }
 
 /** Serializes writes so concurrent POSTs cannot lose a record. */
-function createRecord(record) {
+function createRecord(record, file = recordsFile) {
   const operation = recordWriteQueue.then(async () => {
-    const records = await getRecords();
+    const records = await getRecords(file);
     const existingRecord = records.find((item) => item.id === record.id);
     if (existingRecord) {
       return { record: existingRecord, duplicate: true };
     }
 
     records.push(record);
-    await saveRecords(records);
+    await saveRecords(records, file);
     return { record, duplicate: false };
   });
 
@@ -114,6 +115,43 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+
+    if (request.method === 'GET' && url.pathname === '/api/pets') {
+      sendJson(response, 200, await getRecords(petsFile));
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/pets') {
+      let value;
+      try { value = JSON.parse(await readBody(request)); }
+      catch {
+        sendJson(response, 400, { error: 'Invalid JSON body.' });
+        return;
+      }
+      if (
+        !value || typeof value !== 'object' ||
+        typeof value.id !== 'string' || !value.id.trim() ||
+        typeof value.name !== 'string' || !value.name.trim() || value.name.length > 80 ||
+        !['Perro', 'Gato', 'Ave', 'Conejo', 'Otro'].includes(value.species) ||
+        typeof value.breed !== 'string' || value.breed.length > 80 ||
+        !['Hembra', 'Macho', 'Sin especificar'].includes(value.sex) ||
+        !(value.ageYears === null || (Number.isInteger(value.ageYears) && value.ageYears >= 0 && value.ageYears <= 200)) ||
+        !(value.weightKg === null || (typeof value.weightKg === 'number' && Number.isFinite(value.weightKg) && value.weightKg > 0)) ||
+        typeof value.createdAt !== 'string' || !Number.isFinite(Date.parse(value.createdAt))
+      ) {
+        sendJson(response, 400, { error: 'A valid pet profile is required.' });
+        return;
+      }
+      const pet = {
+        id: value.id, name: value.name.trim(), species: value.species,
+        breed: value.breed.trim(), sex: value.sex, ageYears: value.ageYears,
+        weightKg: value.weightKg, createdAt: value.createdAt,
+      };
+      const result = await createRecord(pet, petsFile);
+      sendJson(response, result.duplicate ? 200 : 201, result);
+      return;
+    }
+
     sendJson(response, 404, { error: 'Route not found.' });
   } catch (error) {
     console.error(error);
@@ -122,5 +160,5 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, () => {
-  console.log(`PetCare API ready at http://localhost:${port}`);
+  console.log(`PetCare API ready at http://localhost:${server.address().port}`);
 });

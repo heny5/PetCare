@@ -6,6 +6,7 @@ export const environment = {
   production: false,
   // API local de desarrollo. `npm start` inicia la API y la aplicación.
   apiUrl: 'http://localhost:3000/api/care-records',
+  petsApiUrl: 'http://localhost:3000/api/pets',
 };
 
 /*
