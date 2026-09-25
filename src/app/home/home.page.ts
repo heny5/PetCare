@@ -1,9 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Network, ConnectionStatus } from '@capacitor/network';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { IonContent } from '@ionic/angular';
+import { CareRecordService } from '../services/care-record.service';
+import { ConnectivityService } from '../services/connectivity.service';
 
 type Vista =
   | 'inicio'
@@ -15,13 +17,6 @@ type Vista =
   | 'historial'
   | 'alertas'
   | 'compartir';
-
-interface RegistroPendiente {
-  id: string;
-  tipo: string;
-  detalle: string;
-  fecha: string;
-}
 
 interface AlertaCollar {
   id: number;
@@ -42,13 +37,32 @@ export class HomePage implements OnInit, OnDestroy {
   vista: Vista = 'inicio';
   dispositivoConectado = false;
   lecturaNfc = false;
-  mensaje = '';
-  enLinea = true;
-  sincronizando = false;
-  ultimaSincronizacion = '';
-  pendientes: RegistroPendiente[] = [];
-  modoDemostracion = true;
-  estadoRealConexion = true;
+  readonly careRecords = inject(CareRecordService);
+  private readonly connectivity = inject(ConnectivityService);
+  private readonly mensajeLocal = signal('');
+  readonly guardando = signal(false);
+  private readonly registrosPendientes = computed(() =>
+    this.careRecords.pendingRecords().map((record) => ({
+      id: record.id,
+      tipo: `Cuidado de ${record.petName}`,
+      detalle: record.description,
+      fecha: record.createdAt,
+    }))
+  );
+
+  get mensaje(): string { return this.mensajeLocal(); }
+  set mensaje(value: string) { this.mensajeLocal.set(value); }
+  get enLinea(): boolean { return this.connectivity.isOnline(); }
+  get modoDemostracion(): boolean { return this.connectivity.isDemoMode(); }
+  get sincronizando(): boolean { return this.careRecords.isSynchronizing(); }
+  get pendientes() { return this.registrosPendientes(); }
+  get ultimaSincronizacion(): string {
+    const fecha = this.careRecords.lastSyncedAt();
+    return fecha ? new Date(fecha).toLocaleTimeString('es-DO', {
+      hour: '2-digit', minute: '2-digit',
+    }) : '';
+  }
+
   buscandoBluetooth = false;
   dispositivoEncontrado = false;
   mascotaPerdida = false;
@@ -62,18 +76,50 @@ export class HomePage implements OnInit, OnDestroy {
     { id: 3, tipo: 'informativa', titulo: 'Actividad fuera de lo normal', detalle: 'Luna permaneció inactiva más tiempo de lo habitual.', hora: 'Ayer · 9:10 p. m.', revisada: true },
   ];
   private networkListener?: PluginListenerHandle;
+  private destroyed = false;
 
-  async ngOnInit(): Promise<void> {
-    this.cargarPendientes();
-    this.cargarEstadoLocal();
-    const estado = await Network.getStatus();
-    this.actualizarEstadoRed(estado);
-    this.networkListener = await Network.addListener('networkStatusChange', (status) => {
-      this.actualizarEstadoRed(status);
+  constructor() {
+    effect(() => {
+      const synchronizing = this.careRecords.isSynchronizing();
+      const pending = this.careRecords.pendingCount();
+      const error = this.careRecords.syncError();
+      const lastSync = this.careRecords.lastSyncedAt();
+      const online = this.enLinea;
+      if (this.careRecords.migrationError()) {
+        this.mensaje = 'Algunos registros anteriores no pudieron recuperarse. Se conservaron en este dispositivo.';
+      } else if (synchronizing) {
+        this.mensaje = 'Sincronizando cuidados…';
+      } else if (pending && !online) {
+        this.mensaje = 'Registro guardado en el dispositivo. Se sincronizará cuando regrese internet.';
+      } else if (error) {
+        this.mensaje = 'No fue posible contactar la API. Los registros siguen guardados; se reintentará en 15 segundos.';
+      } else if (!pending && lastSync) {
+        this.mensaje = 'Sincronización completada correctamente.';
+      }
     });
   }
 
+  async ngOnInit(): Promise<void> {
+    this.cargarEstadoLocal();
+    try {
+      const estado = await Network.getStatus();
+      if (this.destroyed) return;
+      this.actualizarEstadoRed(estado);
+      const listener = await Network.addListener('networkStatusChange', (status) => {
+        this.actualizarEstadoRed(status);
+      });
+      if (this.destroyed) {
+        await listener.remove();
+      } else {
+        this.networkListener = listener;
+      }
+    } catch {
+      // ConnectivityService also follows browser online/offline events.
+    }
+  }
+
   async ngOnDestroy(): Promise<void> {
+    this.destroyed = true;
     await this.networkListener?.remove();
   }
 
@@ -114,22 +160,26 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   async registrarControl(): Promise<void> {
-    const detalle = this.cuidadoRealizado.trim() || 'Control de hidratación y actividad normal.';
-    const registro: RegistroPendiente = {
-      id: `PET-${Date.now()}`,
-      tipo: `Cuidado de ${this.nombreMascota.trim() || 'Luna'}`,
-      detalle,
-      fecha: new Date().toISOString(),
-    };
+    if (this.guardando()) return;
+    const petName = this.nombreMascota.trim();
+    const originalDescription = this.cuidadoRealizado;
+    const description = originalDescription.trim();
+    if (!petName || !description) {
+      this.mensaje = 'Completa el nombre de la mascota y el cuidado realizado.';
+      return;
+    }
 
-    this.pendientes.push(registro);
-    this.guardarPendientes();
-    this.cuidadoRealizado = '';
-    this.mensaje = this.enLinea
-      ? 'Registro creado. Iniciando sincronización…'
-      : 'Registro guardado en el dispositivo. Se sincronizará cuando regrese internet.';
-
-    if (this.enLinea) await this.sincronizarPendientes();
+    this.guardando.set(true);
+    try {
+      await this.careRecords.save({ petName, description });
+      if (this.cuidadoRealizado === originalDescription) {
+        this.cuidadoRealizado = '';
+      }
+    } catch {
+      this.mensaje = 'No se pudo guardar el cuidado en este dispositivo. Conserva el texto e inténtalo de nuevo.';
+    } finally {
+      this.guardando.set(false);
+    }
   }
 
   async sincronizarPendientes(): Promise<void> {
@@ -137,78 +187,29 @@ export class HomePage implements OnInit, OnDestroy {
       this.mensaje = 'No hay conexión. Los datos continúan guardados en este dispositivo.';
       return;
     }
-    if (this.sincronizando) return;
-    if (this.pendientes.length === 0) {
+    if (!this.pendientes.length) {
       this.mensaje = 'No existen registros pendientes de sincronización.';
       return;
     }
-
-    this.sincronizando = true;
-    for (const registro of [...this.pendientes]) {
-      try {
-        const respuesta = await fetch('https://jsonplaceholder.typicode.com/posts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...registro, mascota: 'Luna', aplicacion: 'PetCare' }),
-        });
-        if (!respuesta.ok) throw new Error('Servidor sin respuesta');
-        this.pendientes = this.pendientes.filter((item) => item.id !== registro.id);
-        this.guardarPendientes();
-      } catch {
-        this.mensaje = 'No fue posible contactar el servidor de demostración. El registro sigue pendiente.';
-        break;
-      }
-    }
-
-    this.sincronizando = false;
-    if (this.pendientes.length === 0) {
-      this.ultimaSincronizacion = new Date().toLocaleTimeString('es-DO', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      this.mensaje = 'Sincronización completada correctamente.';
-    }
+    await this.careRecords.syncPending();
   }
 
   private actualizarEstadoRed(status: ConnectionStatus): void {
-    this.estadoRealConexion = status.connected;
-    if (this.modoDemostracion) return;
-    const estabaSinConexion = !this.enLinea;
-    this.enLinea = status.connected;
-    if (this.enLinea && (estabaSinConexion || this.pendientes.length > 0)) {
-      void this.sincronizarPendientes();
-    }
-  }
-
-  private cargarPendientes(): void {
-    try {
-      this.pendientes = JSON.parse(localStorage.getItem('petcare-pendientes') ?? '[]');
-    } catch {
-      this.pendientes = [];
-    }
-  }
-
-  private guardarPendientes(): void {
-    localStorage.setItem('petcare-pendientes', JSON.stringify(this.pendientes));
+    this.connectivity.updateNetworkStatus(status.connected);
   }
 
   cambiarConexionDemo(conectado: boolean): void {
-    const estabaSinConexion = !this.enLinea;
-    this.modoDemostracion = true;
-    this.enLinea = conectado;
+    this.connectivity.setDemoOnline(conectado);
     this.mensaje = conectado
       ? 'Modo demostración: conexión recuperada.'
       : 'Modo demostración: ahora estás sin conexión.';
-    localStorage.setItem('petcare-demo-online', JSON.stringify(conectado));
-    if (conectado && (estabaSinConexion || this.pendientes.length > 0)) {
-      void this.sincronizarPendientes();
-    }
+    if (conectado) void this.careRecords.syncPending();
   }
 
   usarEstadoReal(): void {
-    this.modoDemostracion = false;
-    this.enLinea = this.estadoRealConexion;
+    this.connectivity.useRealNetwork();
     this.mensaje = 'PetCare volvió a utilizar el estado real de la red.';
+    if (this.enLinea) void this.careRecords.syncPending();
   }
 
   alternarMascotaPerdida(): void {
@@ -260,8 +261,6 @@ export class HomePage implements OnInit, OnDestroy {
 
   private cargarEstadoLocal(): void {
     try {
-      const demo = localStorage.getItem('petcare-demo-online');
-      if (demo !== null) this.enLinea = JSON.parse(demo);
       this.mascotaPerdida = JSON.parse(localStorage.getItem('petcare-mascota-perdida') ?? 'false');
       this.fechaAlertaPerdida = localStorage.getItem('petcare-fecha-perdida') ?? '';
       this.hallazgoRegistrado = JSON.parse(localStorage.getItem('petcare-hallazgo') ?? 'false');

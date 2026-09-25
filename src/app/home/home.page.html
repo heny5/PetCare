@@ -175,7 +175,7 @@
             <small>{{ pendientes.length }} registro(s) pendiente(s) de sincronización</small><h2>Registrar cuidado</h2>
             <label>Nombre de la mascota<input type="text" [(ngModel)]="nombreMascota" placeholder="Ej.: Luna"></label>
             <label>Cuidado realizado<textarea [(ngModel)]="cuidadoRealizado" placeholder="Ej.: Paseo y comida"></textarea></label>
-            <button type="button" (click)="registrarControl()">GUARDAR CUIDADO @if (pendientes.length > 0) { <span>{{ pendientes.length }}</span> }</button>
+            <button type="button" (click)="registrarControl()" [disabled]="guardando()">GUARDAR CUIDADO @if (pendientes.length > 0) { <span>{{ pendientes.length }}</span> }</button>
           </section>
           <div class="timeline">
             @if (pendientes.length > 0) {
@@ -189,7 +189,7 @@
             <article><span class="time-icon violet">📱</span><div><small>28 de agosto</small><h3>Etiqueta NFC vinculada</h3><p>Identificador PET-LUNA-001.</p></div></article>
           </div>
           <button class="sync-now" type="button" (click)="sincronizarPendientes()" [disabled]="sincronizando">{{ sincronizando ? 'SINCRONIZANDO…' : 'SINCRONIZAR AHORA' }}</button>
-          @if (mensaje) { <div class="success">✓ {{ mensaje }}</div> }
+          @if (mensaje) { <div class="success" role="status" [class.sync-error]="careRecords.syncError() || careRecords.migrationError()">{{ careRecords.syncError() || careRecords.migrationError() ? '⚠' : '✓' }} {{ mensaje }}</div> }
         </section>
       }
 
