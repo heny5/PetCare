@@ -9,7 +9,7 @@ import {
   signal
 } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import {
   Network,
   ConnectionStatus
@@ -17,11 +17,14 @@ import {
 import type {
   PluginListenerHandle
 } from '@capacitor/core';
-import { IonContent } from '@ionic/angular';
+import { IonContent, IonIcon, IonPopover } from '@ionic/angular';
+import { addIcons } from 'ionicons';
+import { personCircleOutline } from 'ionicons/icons';
 import { PetService } from '../services/pet.service';
 import { PET_SPECIES, PET_SEXES, PetDraft, StoredPet, isPetDraft } from '../services/pet.model';
 import { CareRecordService } from '../services/care-record.service';
 import { ConnectivityService } from '../services/connectivity.service';
+import { AuthService } from '../services/auth.service';
 
 type Vista =
   | 'inicio'
@@ -55,10 +58,14 @@ interface AlertaCollar {
     CommonModule,
     FormsModule,
     IonContent,
+    IonIcon,
+    IonPopover,
     RouterLink
   ],
 })
 export class HomePage implements OnInit, OnDestroy {
+  readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   vista: Vista = 'inicio';
 
   dispositivoConectado = false;
@@ -147,6 +154,7 @@ export class HomePage implements OnInit, OnDestroy {
   private destroyed = false;
 
   constructor() {
+    addIcons({ personCircleOutline });
     effect(() => {
       const synchronizing = this.careRecords.isSynchronizing();
       const pending = this.careRecords.pendingCount();
@@ -190,6 +198,13 @@ export class HomePage implements OnInit, OnDestroy {
     this.destroyed = true;
     await this.networkListener?.remove();
   }
+
+  async cerrarSesion(popover: IonPopover): Promise<void> {
+    await popover.dismiss();
+    this.auth.logout();
+    await this.router.navigateByUrl('/login', { replaceUrl: true });
+  }
+
 
   abrir(vista: Vista): void {
     this.mascotaPorEliminar = null;

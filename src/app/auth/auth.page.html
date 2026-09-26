@@ -1,0 +1,42 @@
+<ion-content [fullscreen]="true" class="petcare-content">
+  <main class="app-shell">
+    <header class="auth-brand">
+      <span class="brand-mark" aria-hidden="true">🐾</span>
+      <span><b>PetCare</b><small>Bienestar conectado</small></span>
+    </header>
+
+    <section class="auth-page">
+      <div class="auth-card">
+        <span class="eyebrow">{{ isRegister() ? 'Únete a PetCare' : 'Bienvenido de nuevo' }}</span>
+        <h1>{{ isRegister() ? 'Crear cuenta' : 'Iniciar sesión' }}</h1>
+
+        <form (ngSubmit)="submit()">
+          <label for="username">Usuario</label>
+          <input id="username" name="username" type="text" autocomplete="username" required
+            [ngModel]="username()" (ngModelChange)="username.set($event)" />
+
+          <label for="password">Contraseña</label>
+          <input id="password" name="password" type="password"
+            [attr.autocomplete]="isRegister() ? 'new-password' : 'current-password'" required
+            [ngModel]="password()" (ngModelChange)="password.set($event)" />
+
+          @if (isRegister()) {
+            <label for="phone">Teléfono</label>
+            <input id="phone" name="phone" type="tel" autocomplete="tel" required
+              [ngModel]="phone()" (ngModelChange)="phone.set($event)" />
+          }
+
+          @if (error()) { <p class="field-error" role="alert">{{ error() }}</p> }
+
+          <button class="primary wide" type="submit" [disabled]="busy()">
+            {{ busy() ? 'Un momento…' : isRegister() ? 'Crear cuenta' : 'Iniciar sesión' }}
+          </button>
+        </form>
+
+        <button class="text-button" type="button" (click)="toggleMode()">
+          {{ isRegister() ? '¿Ya tienes una cuenta? Iniciar sesión' : '¿No tienes una cuenta? Crear cuenta' }}
+        </button>
+      </div>
+    </section>
+  </main>
+</ion-content>
