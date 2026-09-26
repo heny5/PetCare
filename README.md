@@ -61,15 +61,25 @@ Al iniciar, el servicio incorpora los pendientes del formato anterior (`petcare-
 
 Borrar los datos del sitio elimina la cola local. El proyecto no configura un service worker para garantizar la apertura o recarga de la web sin conexión.
 
+## Registro de mascotas
+
+En **Mis mascotas**, pulsa **＋** para abrir el formulario. El nombre y la especie son obligatorios; puedes indicar raza, sexo, edad en años y peso en kg. Al guardar, aparece una tarjeta con acceso a su ficha y al formulario de cuidados con el nombre ya seleccionado.
+
+Las mascotas se guardan primero en el dispositivo (`localStorage`, clave `petcare.pets`). Se pueden registrar sin conexión con la aplicación abierta. Al abrir **Mis mascotas**, se recuperan también los perfiles del servidor. Los pendientes también se recuperan al iniciar la aplicación. Se sincronizan al recuperar la conexión y se reintentan cada 15 segundos si falla la API; las peticiones tienen un límite de 10 segundos. Cada mascota conserva su identificador para evitar duplicados al reintentar.
+
+La API guarda los perfiles en `data/pets.json`, ignorado por Git. Luna y Milo son perfiles de ejemplo: las mascotas nuevas muestran sus propios datos y no heredan las lecturas ni la ficha clínica de Luna. Reinicia `npm start` si la API ya estaba ejecutándose antes de añadir esta función.
+
 ## API local
 
-`npm start` inicia `server.mjs` automáticamente. Por defecto escucha en `http://localhost:3000`. El puerto puede cambiarse mediante `PORT`; si lo cambias, ajusta también `environment.apiUrl`.
+`npm start` inicia `server.mjs` automáticamente. Por defecto escucha en `http://localhost:3000`. El puerto puede cambiarse mediante `PORT`; si lo cambias, ajusta también `environment.apiUrl` y `environment.petsApiUrl`.
 
 | Método y ruta | Función |
 | --- | --- |
 | `GET /health` | Devuelve `{"status":"ok"}`. |
 | `GET /api/care-records` | Devuelve los cuidados guardados. |
 | `POST /api/care-records` | Guarda un cuidado con `id`, `petName`, `description` y `createdAt`. |
+| `GET /api/pets` | Devuelve las mascotas guardadas. |
+| `POST /api/pets` | Guarda un perfil con `id`, `name`, `species`, `breed`, `sex`, `ageYears`, `weightKg` y `createdAt`. |
 
 Los registros aceptados se guardan en `data/care-records.json`, ignorado por Git. La API evita duplicados por `id`.
 
@@ -82,7 +92,9 @@ Invoke-WebRequest -UseBasicParsing http://localhost:3000/health
 | Desarrollo | `http://localhost:3000/api/care-records` |
 | Producción | `/api/care-records` |
 
-En producción debes servir esa ruta con un backend. En un dispositivo físico, `localhost` se refiere al propio dispositivo: configura la dirección accesible del equipo que ejecuta la API.
+El endpoint de mascotas es `http://localhost:3000/api/pets` en desarrollo y `/api/pets` en producción (`environment.petsApiUrl`).
+
+En producción debes servir ambas rutas con un backend. En un dispositivo físico, `localhost` se refiere al propio dispositivo: configura la dirección accesible del equipo que ejecuta la API.
 
 ## Probar el modo offline
 
@@ -129,7 +141,10 @@ En `HomePage`, la búsqueda y conexión Bluetooth, la lectura NFC y la preparaci
 npm run build -- --configuration development
 npm run build
 npm test -- --watch=false
+npm run test:api
 npm run lint
 ~~~
 
 Estos comandos permiten comprobar la compilación de desarrollo, la compilación de producción, las pruebas y el análisis estático. Las pruebas de cuidados verifican también la actualización visual sin interacciones adicionales, los fallos de red, la recuperación de pendientes y los reintentos.
+
+Las pruebas de mascotas cubren el formulario, la ficha seleccionada, la persistencia local, la recuperación de conexión y los reintentos. `npm run test:api` inicia una API en un puerto temporal y verifica persistencia, validación y duplicados sin modificar los datos de desarrollo.

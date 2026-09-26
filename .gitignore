@@ -29,6 +29,7 @@ log.txt
 /out-tsc
 /bazel-out
 /data/care-records.json
+/data/pets.json
 
 # Node
 /node_modules
