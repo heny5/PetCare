@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import {
   Component,
+  ChangeDetectorRef,
   OnDestroy,
   OnInit,
   computed,
@@ -65,6 +66,7 @@ interface AlertaCollar {
 })
 export class HomePage implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
+  private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly router = inject(Router);
   vista: Vista = 'inicio';
 
@@ -221,7 +223,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.abrir('nueva-mascota');
   }
 
-  registrarMascota(form: NgForm): void {
+  async registrarMascota(form: NgForm): Promise<void> {
     if (this.vista !== 'nueva-mascota') return;
     this.errorMascota.set('');
     if (form.invalid || !isPetDraft(this.nuevaMascota)) {
@@ -229,13 +231,15 @@ export class HomePage implements OnInit, OnDestroy {
       return;
     }
     try {
-      const pet = this.editandoMascotaId
+      const pet = await (this.editandoMascotaId
         ? this.petStore.update(this.editandoMascotaId, this.nuevaMascota)
-        : this.petStore.add(this.nuevaMascota);
+        : this.petStore.add(this.nuevaMascota));
       this.avisoMascota.set(this.editandoMascotaId ? `Se actualizaron los datos de ${pet.name}.` : `${pet.name} se añadió a tus mascotas.`);
       this.abrir('mascotas');
+      this.changeDetector.detectChanges();
     } catch {
       this.errorMascota.set('No se pudo guardar la mascota en este dispositivo. Conserva los datos e inténtalo de nuevo.');
+      this.changeDetector.detectChanges();
     }
   }
 
@@ -263,15 +267,17 @@ export class HomePage implements OnInit, OnDestroy {
     this.mascotaPorEliminar = pet;
   }
 
-  eliminarMascota(): void {
+  async eliminarMascota(): Promise<void> {
     const pet = this.mascotaPorEliminar;
     if (!pet) return;
     try {
-      this.petStore.remove(pet.id);
+      await this.petStore.remove(pet.id);
       this.avisoMascota.set(`${pet.name} se eliminó de tus mascotas.`);
       this.abrir('mascotas');
+      this.changeDetector.detectChanges();
     } catch {
       this.errorMascota.set('No se pudo eliminar la mascota. Inténtalo de nuevo.');
+      this.changeDetector.detectChanges();
     }
   }
 
