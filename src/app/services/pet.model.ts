@@ -10,7 +10,7 @@ export interface PetDraft {
   weightKg: number | null;
 }
 export interface Pet extends PetDraft { id: string; createdAt: string; }
-export interface StoredPet extends Pet { pending: boolean; }
+export interface StoredPet extends Pet { pending: boolean; deleted?: boolean; operation?: 'PUT'; }
 
 export function isPetDraft(value: unknown): value is PetDraft {
   if (!value || typeof value !== 'object') return false;

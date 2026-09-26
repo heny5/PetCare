@@ -66,6 +66,23 @@ test('pet API persists, validates and deduplicates profiles independently of car
     }
     assert.equal((await (await fetch(base + '/api/pets')).json()).length, 1);
   });
+  await t.test('updates profiles durably and deletes idempotently', async () => {
+    const updated = { ...pet, name: 'Coco nuevo', weightKg: 6 };
+    const put = (body) => fetch(base + '/api/pets/' + pet.id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    assert.equal((await put({ ...updated, weightKg: -1 })).status, 400);
+    assert.equal((await put({ ...updated, id: 'other' })).status, 400);
+    assert.equal((await put(updated)).status, 200);
+    assert.equal((await (await fetch(base + '/api/pets')).json())[0].name, 'Coco nuevo');
+    assert.equal(JSON.parse(await readFile(join(directory, 'data', 'pets.json'), 'utf8'))[0].weightKg, 6);
+    for (let i = 0; i < 2; i++) {
+      assert.equal((await fetch(base + '/api/pets/' + pet.id, { method: 'DELETE' })).status, 200);
+    }
+    assert.deepEqual(await (await fetch(base + '/api/pets')).json(), []);
+    await post('/api/pets', pet);
+  });
+
   await t.test('keeps care persistence intact and separate from pet profiles', async () => {
     const care = { id: pet.id, petName: 'Coco', description: 'Paseo', createdAt: pet.createdAt };
     assert.equal((await post('/api/care-records', care)).status, 201);

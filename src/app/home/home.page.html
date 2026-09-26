@@ -279,6 +279,17 @@
             <button class="circle" type="button" aria-label="Agregar mascota" (click)="abrirFormularioMascota()">＋</button>
           </div>
           @if (avisoMascota()) { <p class="success" role="status">{{ avisoMascota() }}</p> }
+          @if (mascotaPorEliminar; as mascota) {
+            <section class="pet-delete-confirm" role="alertdialog" aria-labelledby="delete-pet-title" aria-describedby="delete-pet-description">
+              <h2 id="delete-pet-title">¿Eliminar a {{ mascota.name }}?</h2>
+              <p id="delete-pet-description">Su ficha se quitará de Mis mascotas. Esta acción no se puede deshacer.</p>
+              <div class="pet-form-actions">
+                <button class="danger" type="button" (click)="eliminarMascota()">Sí, eliminar mascota</button>
+                <button class="secondary" type="button" (click)="mascotaPorEliminar = null">Cancelar</button>
+              </div>
+              @if (errorMascota()) { <p class="field-error" role="alert">{{ errorMascota() }}</p> }
+            </section>
+          }
           @if (petStore.storageError()) {
             <p class="success sync-error" role="alert">No se pudieron leer las mascotas guardadas. Los datos anteriores se conservaron.</p>
           } @else if (petStore.isSynchronizing()) {
@@ -292,6 +303,7 @@
             <p class="pet-sync-status" role="status">Tienes {{ petStore.pendingCount() }} mascota(s) pendiente(s). Se enviarán cuando vuelva la conexión.</p>
           }
           @for (mascota of petStore.pets(); track mascota.id) {
+            <article class="pet-list-item">
             <button type="button" class="pet-card pet-card-button"
               [class.featured]="mascota.id === 'demo-luna'"
               [attr.aria-label]="'Ver ficha de ' + mascota.name" (click)="seleccionarMascota(mascota)">
@@ -305,6 +317,13 @@
               </span>
               <span class="chevron" aria-hidden="true">›</span>
             </button>
+              <div class="pet-list-actions">
+                <button class="secondary" type="button" [attr.aria-label]="'Editar a ' + mascota.name" (click)="editarMascota(mascota)">Editar</button>
+                <button class="danger" type="button" [attr.aria-label]="'Eliminar a ' + mascota.name" (click)="solicitarEliminarMascota(mascota)">Eliminar</button>
+              </div>
+            </article>
+          } @empty {
+            <p class="empty-note">Todavía no tienes mascotas. Pulsa ＋ para añadir la primera.</p>
           }
           <div class="empty-note"><span aria-hidden="true">💡</span><p>Toca una mascota para consultar su ficha o pulsa ＋ para añadir una nueva.</p></div>
         </section>
@@ -313,8 +332,8 @@
       @case ('nueva-mascota') {
         <section class="page">
           <button class="back" type="button" (click)="abrir('mascotas')">← Mis mascotas</button>
-          <div class="page-heading"><div><span class="eyebrow">Un nuevo miembro</span><h1>Nueva mascota</h1></div><span class="pet-form-icon" aria-hidden="true">{{ iconoMascota(nuevaMascota.species) }}</span></div>
-          <p class="pet-form-intro">Añade sus datos para crear su ficha. El nombre y la especie son obligatorios.</p>
+          <div class="page-heading"><div><span class="eyebrow">{{ editandoMascotaId ? 'Actualizar ficha' : 'Un nuevo miembro' }}</span><h1>{{ editandoMascotaId ? 'Editar mascota' : 'Nueva mascota' }}</h1></div><span class="pet-form-icon" aria-hidden="true">{{ iconoMascota(nuevaMascota.species) }}</span></div>
+          <p class="pet-form-intro">{{ editandoMascotaId ? 'Modifica sus datos y guarda los cambios.' : 'Añade sus datos para crear su ficha.' }} El nombre y la especie son obligatorios.</p>
           <form class="pet-form" #petForm="ngForm" (ngSubmit)="registrarMascota(petForm)" novalidate>
             <label for="pet-name">Nombre <span aria-hidden="true">*</span></label>
             <input id="pet-name" name="petName" [(ngModel)]="nuevaMascota.name" required maxlength="80"
@@ -351,7 +370,7 @@
             @if (!enLinea) { <p class="pet-sync-status">Puedes guardarla sin conexión. Se sincronizará cuando vuelvas a estar en línea.</p> }
             @if (errorMascota()) { <p class="success sync-error" role="alert">{{ errorMascota() }}</p> }
             <div class="pet-form-actions">
-              <button class="primary" type="submit">Guardar mascota</button>
+              <button class="primary" type="submit">{{ editandoMascotaId ? 'Guardar cambios' : 'Guardar mascota' }}</button>
               <button class="secondary" type="button" (click)="abrir('mascotas')">Cancelar</button>
             </div>
           </form>
@@ -359,7 +378,7 @@
       }
 
       @case ('detalle') {
-        @let mascota = mascotaSeleccionada();
+        @if (mascotaSeleccionada(); as mascota) {
         <section class="page">
           <button class="back" type="button" (click)="abrir('mascotas')">← Mis mascotas</button>
           <div class="profile-cover" [class.lost-cover]="mascota.id === 'demo-luna' && mascotaPerdida">
@@ -483,6 +502,7 @@
           }
           <button class="primary wide spaced" type="button" (click)="abrirCuidadosMascota()">Registrar cuidado de {{ mascota.name }}</button>
         </section>
+        }
       }
 
       @case ('conectar') {
@@ -874,7 +894,7 @@
               }
             }
 
-            @if (mascotaSeleccionada().id === 'demo-luna' && nombreMascota === 'Luna') {
+            @if (mascotaSeleccionada()?.id === 'demo-luna' && nombreMascota === 'Luna') {
             <article>
               <span class="time-icon green">
                 ✓

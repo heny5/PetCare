@@ -116,6 +116,46 @@ describe('PetService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('persists edits and deletions offline, including demo profiles, across reloads', () => {
+    const service = TestBed.inject(PetService);
+    const pet = service.add(draft);
+    service.update(pet.id, { ...draft, name: 'Nuevo' });
+    service.update('demo-luna', { ...draft, name: 'Luna nueva' });
+    service.remove('demo-milo');
+    TestBed.resetTestingModule();
+    const restored = TestBed.inject(PetService);
+    expect(restored.pets().map((item) => item.name)).toEqual(['Luna nueva', 'Nuevo']);
+    restored.remove(pet.id);
+    expect(restored.pets()).toHaveLength(1);
+    expect(JSON.parse(localStorage.getItem(key)!).find((item: { id: string }) => item.id === pet.id).deleted).toBe(true);
+  });
+
+  it('sends an edit made during creation and then deletes without resurrecting stale remote data', async () => {
+    const service = TestBed.inject(PetService);
+    const pet = service.add(draft);
+    TestBed.tick();
+    let acknowledge!: (value: ReturnType<typeof reply>) => void;
+    fetchMock.mockResolvedValueOnce(reply([]))
+      .mockImplementationOnce(() => new Promise((resolve) => { acknowledge = resolve; }))
+      .mockResolvedValue(reply({}));
+    network.setDemoOnline(true);
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(0);
+    service.update(pet.id, { ...draft, name: 'Nuevo' });
+    acknowledge(reply({}));
+    await service.sync();
+    expect(fetchMock.mock.calls[2][1].method).toBe('PUT');
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).name).toBe('Nuevo');
+    fetchMock.mockResolvedValueOnce(reply([pet])).mockResolvedValueOnce(reply({}));
+    service.remove(pet.id);
+    await service.sync();
+    expect(fetchMock.mock.calls.at(-1)![1].method).toBe('DELETE');
+    expect(service.pendingCount()).toBe(0);
+    fetchMock.mockResolvedValueOnce(reply([pet]));
+    await service.sync();
+    expect(service.pets().some((item) => item.id === pet.id)).toBe(false);
+  });
+
   it('rejects invalid input and preserves the existing list when storage is full', () => {
     const service = TestBed.inject(PetService);
     expect(() => service.add({ ...draft, name: ' ' })).toThrow();

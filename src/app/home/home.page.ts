@@ -71,10 +71,12 @@ export class HomePage implements OnInit, OnDestroy {
   readonly errorMascota = signal('');
   readonly avisoMascota = signal('');
   private readonly mascotaId = signal('demo-luna');
-  readonly mascotaSeleccionada = computed(() =>
+  readonly mascotaSeleccionada = computed<StoredPet | undefined>(() =>
     this.petStore.pets().find((pet) => pet.id === this.mascotaId()) ?? this.petStore.pets()[0]
   );
   nuevaMascota: PetDraft = this.formularioMascotaVacio();
+  editandoMascotaId: string | null = null;
+  mascotaPorEliminar: StoredPet | null = null;
   private readonly connectivity = inject(ConnectivityService);
   private readonly mensajeLocal = signal('');
   readonly guardando = signal(false);
@@ -190,12 +192,14 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   abrir(vista: Vista): void {
+    this.mascotaPorEliminar = null;
     this.vista = vista;
     this.mensaje = '';
     if (vista === 'mascotas') this.petStore.activate();
   }
 
   abrirFormularioMascota(): void {
+    this.editandoMascotaId = null;
     this.nuevaMascota = this.formularioMascotaVacio();
     this.errorMascota.set('');
     this.avisoMascota.set('');
@@ -210,22 +214,56 @@ export class HomePage implements OnInit, OnDestroy {
       return;
     }
     try {
-      const pet = this.petStore.add(this.nuevaMascota);
-      this.avisoMascota.set(`${pet.name} se añadió a tus mascotas.`);
+      const pet = this.editandoMascotaId
+        ? this.petStore.update(this.editandoMascotaId, this.nuevaMascota)
+        : this.petStore.add(this.nuevaMascota);
+      this.avisoMascota.set(this.editandoMascotaId ? `Se actualizaron los datos de ${pet.name}.` : `${pet.name} se añadió a tus mascotas.`);
       this.abrir('mascotas');
     } catch {
       this.errorMascota.set('No se pudo guardar la mascota en este dispositivo. Conserva los datos e inténtalo de nuevo.');
     }
   }
 
-  seleccionarMascota(pet: StoredPet): void {
+  seleccionarMascota(pet: StoredPet | undefined): void {
+    if (!pet) { this.abrir('mascotas'); return; }
     this.mascotaId.set(pet.id);
     this.nombreMascota = pet.name;
     this.abrir('detalle');
   }
 
+  editarMascota(pet: StoredPet): void {
+    this.editandoMascotaId = pet.id;
+    this.nuevaMascota = {
+      name: pet.name, species: pet.species, breed: pet.breed,
+      sex: pet.sex, ageYears: pet.ageYears, weightKg: pet.weightKg,
+    };
+    this.errorMascota.set('');
+    this.avisoMascota.set('');
+    this.abrir('nueva-mascota');
+  }
+
+  solicitarEliminarMascota(pet: StoredPet): void {
+    this.errorMascota.set('');
+    this.avisoMascota.set('');
+    this.mascotaPorEliminar = pet;
+  }
+
+  eliminarMascota(): void {
+    const pet = this.mascotaPorEliminar;
+    if (!pet) return;
+    try {
+      this.petStore.remove(pet.id);
+      this.avisoMascota.set(`${pet.name} se eliminó de tus mascotas.`);
+      this.abrir('mascotas');
+    } catch {
+      this.errorMascota.set('No se pudo eliminar la mascota. Inténtalo de nuevo.');
+    }
+  }
+
   abrirCuidadosMascota(): void {
-    this.nombreMascota = this.mascotaSeleccionada().name;
+    const pet = this.mascotaSeleccionada();
+    if (!pet) { this.abrir('mascotas'); return; }
+    this.nombreMascota = pet.name;
     this.abrir('historial');
   }
 

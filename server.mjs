@@ -12,7 +12,7 @@ function sendJson(response, statusCode, body) {
   response.writeHead(statusCode, {
     // Local development API: no credentials are used.
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json; charset=utf-8',
   });
@@ -73,6 +73,18 @@ function readBody(request) {
   });
 }
 
+function mutatePet(id, pet) {
+  const operation = recordWriteQueue.then(async () => {
+    const records = await getRecords(petsFile);
+    const next = records.filter((item) => item.id !== id);
+    if (pet) next.push(pet);
+    await saveRecords(next, petsFile);
+    return { record: pet ?? null, deleted: !pet };
+  });
+  recordWriteQueue = operation.catch(() => undefined);
+  return operation;
+}
+
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host}`);
 
@@ -121,7 +133,13 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    if (request.method === 'POST' && url.pathname === '/api/pets') {
+    const petRoute = url.pathname.match(/^\/api\/pets\/([^/]+)$/);
+    if (request.method === 'DELETE' && petRoute) {
+      sendJson(response, 200, await mutatePet(decodeURIComponent(petRoute[1]), null));
+      return;
+    }
+
+    if ((request.method === 'POST' && url.pathname === '/api/pets') || (request.method === 'PUT' && petRoute)) {
       let value;
       try { value = JSON.parse(await readBody(request)); }
       catch {
@@ -147,6 +165,14 @@ const server = createServer(async (request, response) => {
         breed: value.breed.trim(), sex: value.sex, ageYears: value.ageYears,
         weightKg: value.weightKg, createdAt: value.createdAt,
       };
+      if (request.method === 'PUT') {
+        if (decodeURIComponent(petRoute[1]) !== pet.id) {
+          sendJson(response, 400, { error: 'Pet id does not match the URL.' });
+          return;
+        }
+        sendJson(response, 200, await mutatePet(pet.id, pet));
+        return;
+      }
       const result = await createRecord(pet, petsFile);
       sendJson(response, result.duplicate ? 200 : 201, result);
       return;

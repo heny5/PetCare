@@ -111,6 +111,50 @@ describe('HomePage pet registration', () => {
     expect(localStorage.getItem('petcare.pets')).toBeNull();
   });
 
+  it('edits an existing profile, cancels deletion and then confirms it', async () => {
+    await input('pet-name', 'Coco');
+    button('Guardar mascota').click();
+    await fixture.whenStable();
+    fixture.nativeElement.querySelector('[aria-label="Editar a Coco"]').click();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#pet-name').value).toBe('Coco');
+    await input('pet-name', 'Coco nuevo');
+    await input('pet-weight', '6');
+    button('Guardar cambios').click();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.petStore.pets()).toHaveLength(3);
+    expect(fixture.componentInstance.petStore.pets()[2]).toMatchObject({ name: 'Coco nuevo', weightKg: 6 });
+    fixture.nativeElement.querySelector('[aria-label="Eliminar a Coco nuevo"]').click();
+    await fixture.whenStable();
+    button('Cancelar').click();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.petStore.pets()).toHaveLength(3);
+    fixture.nativeElement.querySelector('[aria-label="Eliminar a Coco nuevo"]').click();
+    await fixture.whenStable();
+    button('Sí, eliminar mascota').click();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.petStore.pets()).toHaveLength(2);
+    expect(fixture.nativeElement.textContent).toContain('Coco nuevo se eliminó');
+  });
+
+  it('handles removing every pet and opening care history with no selected profile', async () => {
+    button('Cancelar').click();
+    await fixture.whenStable();
+    for (const name of ['Luna', 'Milo']) {
+      fixture.nativeElement.querySelector(`[aria-label="Eliminar a ${name}"]`).click();
+      await fixture.whenStable();
+      button('Sí, eliminar mascota').click();
+      await fixture.whenStable();
+    }
+    expect(fixture.nativeElement.textContent).toContain('Todavía no tienes mascotas');
+    fixture.componentInstance.abrir('historial');
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).not.toContain('Vacuna registrada');
+    fixture.componentInstance.seleccionarMascota(undefined);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('h1').textContent).toBe('Mis mascotas');
+  });
+
   it('cancels without creating a pet', async () => {
     await input('pet-name', 'Sin guardar');
     button('Cancelar').click();
