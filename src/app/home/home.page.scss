@@ -105,7 +105,7 @@ h1,h2,h3,p { margin-top: 0; } h1 { font-size: 31px; line-height: 1.08; letter-sp
 .pet-form ion-input::part(native) { min-height: 46px; }
 .care-form ion-input,.care-form ion-select,.care-form ion-textarea { display: block; width: 100%; margin: 9px 0; --background: #252c2a; --border-color: #414a47; --border-radius: 13px; --color: #f4f8f6; --highlight-color-focused: #48c8a5; --padding-start: 11px; --padding-end: 11px; font-size: 14px; }
 .care-form ion-textarea { min-height: 76px; }
-.video-entry-form ion-input { --background: #fbfdfc; --border-color: #bdcfc8; --border-radius: 10px; --color: var(--ink); --padding-start: 11px; --padding-end: 11px; margin: 10px 0; }
+.video-entry-form ion-input { --background: #17201e; --border-color: #17201e; --border-radius: 10px; --color: #f4f8f6; --highlight-color-focused: #48c8a5; --padding-start: 11px; --padding-end: 11px; margin: 10px 0; border: 1px solid #414a47; border-radius: 10px; }
 .check-list ion-checkbox { display: block; width: 100%; padding: 12px 14px; --checkbox-background-checked: var(--green); --border-color-checked: var(--green); --color: var(--ink); font-size: 13px; font-weight: 650; }
 .check-list ion-checkbox + ion-checkbox { border-top: 1px solid var(--line); }
 .pet-video-controls ion-range { flex: 1 1 70px; min-width: 65px; --bar-background: #47776b; --bar-background-active: #4ce0bb; --knob-background: white; --knob-size: 14px; --height: 30px; padding: 0; }
