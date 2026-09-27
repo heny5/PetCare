@@ -17,9 +17,7 @@
 .auth-card { width: 100%; padding: 24px 20px; border: 1px solid var(--line); border-radius: 20px; background: white; }
 .eyebrow { display: inline-block; color: var(--green); font-size: 12px; font-weight: 850; text-transform: uppercase; margin-bottom: 8px; }
 h1 { margin: 0 0 22px; font-size: 28px; line-height: 1.12; color: var(--ink); }
-label { display: block; margin: 16px 0 7px; color: var(--ink); font-size: 13px; font-weight: 750; }
-input { box-sizing: border-box; width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid #bdcfc8; border-radius: 10px; background: #fbfdfc; color: var(--ink); font: inherit; }
-input:focus { outline: 2px solid var(--green); outline-offset: 2px; }
+.auth-card ion-input { display: block; width: 100%; margin: 12px 0 16px; --background: #fbfdfc; --border-color: #bdcfc8; --border-radius: 10px; --color: var(--ink); --highlight-color-focused: var(--green); --padding-start: 12px; --padding-end: 12px; font-size: 13px; }
 .primary { min-height: 48px; padding: 0 22px; border: 0; border-radius: 15px; background: var(--green); color: white; font: inherit; font-weight: 800; box-shadow: 0 9px 19px rgba(21,134,111,.22); cursor: pointer; }
 .wide { width: 100%; margin-top: 20px; }.primary:disabled { opacity: .65; }
 .text-button { display: block; width: 100%; padding: 20px 5px 0; border: 0; background: none; color: var(--green); font: inherit; font-weight: 750; }

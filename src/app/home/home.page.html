@@ -383,35 +383,37 @@
           <div class="page-heading"><div><span class="eyebrow">{{ editandoMascotaId ? 'Actualizar ficha' : 'Un nuevo miembro' }}</span><h1>{{ editandoMascotaId ? 'Editar mascota' : 'Nueva mascota' }}</h1></div><span class="pet-form-icon" aria-hidden="true">{{ iconoMascota(nuevaMascota.species) }}</span></div>
           <p class="pet-form-intro">{{ editandoMascotaId ? 'Modifica sus datos y guarda los cambios.' : 'Añade sus datos para crear su ficha.' }} El nombre y la especie son obligatorios.</p>
           <form class="pet-form" #petForm="ngForm" (ngSubmit)="registrarMascota(petForm)" novalidate>
-            <label for="pet-name">Nombre <span aria-hidden="true">*</span></label>
-            <input id="pet-name" name="petName" [(ngModel)]="nuevaMascota.name" required maxlength="80"
+            <ion-input id="pet-name" name="petName" label="Nombre *" labelPlacement="stacked" fill="outline"
+              [(ngModel)]="nuevaMascota.name" required maxlength="80"
               placeholder="Ej.: Coco" autocomplete="off" #petName="ngModel"
               [attr.aria-invalid]="petForm.submitted && (petName.invalid || !nuevaMascota.name.trim()) ? 'true' : null">
+            </ion-input>
             @if (petForm.submitted && (petName.invalid || !nuevaMascota.name.trim())) {
               <small class="field-error">Escribe el nombre de tu mascota.</small>
             }
-            <label for="pet-species">Especie <span aria-hidden="true">*</span></label>
-            <select id="pet-species" name="species" [(ngModel)]="nuevaMascota.species" required>
-              @for (especie of especies; track especie) { <option [ngValue]="especie">{{ especie }}</option> }
-            </select>
-            <label for="pet-breed">Raza <span class="optional">(opcional)</span></label>
-            <input id="pet-breed" name="breed" [(ngModel)]="nuevaMascota.breed" maxlength="80" placeholder="Ej.: Mestizo">
-            <label for="pet-sex">Sexo</label>
-            <select id="pet-sex" name="sex" [(ngModel)]="nuevaMascota.sex">
-              @for (sexo of sexos; track sexo) { <option [ngValue]="sexo">{{ sexo }}</option> }
-            </select>
+            <ion-select id="pet-species" name="species" label="Especie *" labelPlacement="stacked" fill="outline" interface="popover" [(ngModel)]="nuevaMascota.species" required>
+              @for (especie of especies; track especie) { <ion-select-option [value]="especie">{{ especie }}</ion-select-option> }
+            </ion-select>
+            <ion-input id="pet-breed" name="breed" label="Raza (opcional)" labelPlacement="stacked" fill="outline"
+              [(ngModel)]="nuevaMascota.breed" maxlength="80" placeholder="Ej.: Mestizo">
+            </ion-input>
+            <ion-select id="pet-sex" name="sex" label="Sexo" labelPlacement="stacked" fill="outline" interface="popover" [(ngModel)]="nuevaMascota.sex">
+              @for (sexo of sexos; track sexo) { <ion-select-option [value]="sexo">{{ sexo }}</ion-select-option> }
+            </ion-select>
             <div class="pet-form-columns">
               <div>
-                <label for="pet-age">Edad en años <span class="optional">(opcional)</span></label>
-                <input id="pet-age" name="ageYears" type="number" min="0" max="200" step="1"
-                  [(ngModel)]="nuevaMascota.ageYears" placeholder="Ej.: 2" #petAge="ngModel">
+                <ion-input id="pet-age" name="ageYears" type="number" min="0" max="200" step="1"
+                  label="Edad en años (opcional)" labelPlacement="stacked" fill="outline"
+                  [ngModel]="nuevaMascota.ageYears" (ngModelChange)="nuevaMascota.ageYears = numeroOpcional($event)" placeholder="Ej.: 2" #petAge="ngModel">
+                </ion-input>
                 <small>Usa 0 si tiene menos de un año.</small>
                 @if (petForm.submitted && petAge.invalid) { <small class="field-error">Indica una edad entre 0 y 200.</small> }
               </div>
               <div>
-                <label for="pet-weight">Peso en kg <span class="optional">(opcional)</span></label>
-                <input id="pet-weight" name="weightKg" type="number" min="0.001" step="any"
-                  [(ngModel)]="nuevaMascota.weightKg" placeholder="Ej.: 5.5" #petWeight="ngModel">
+                <ion-input id="pet-weight" name="weightKg" type="number" min="0.001" step="any"
+                  label="Peso en kg (opcional)" labelPlacement="stacked" fill="outline"
+                  [ngModel]="nuevaMascota.weightKg" (ngModelChange)="nuevaMascota.weightKg = numeroOpcional($event)" placeholder="Ej.: 5.5" #petWeight="ngModel">
+                </ion-input>
                 @if (petForm.submitted && petWeight.invalid) { <small class="field-error">El peso debe ser mayor que cero.</small> }
               </div>
             </div>
@@ -779,43 +781,38 @@
                 <div><small>PLAN PERSONAL</small><h2>Programar cuidado</h2></div>
               </div>
 
-              <label for="care-plan-pet">Mascota</label>
-              <select id="care-plan-pet" name="carePlanPetId" [(ngModel)]="carePlanPetId" required>
+              <ion-select id="care-plan-pet" name="carePlanPetId" label="Mascota" labelPlacement="stacked" fill="outline" interface="popover" [(ngModel)]="carePlanPetId" required>
                 @for (pet of petStore.pets(); track pet.id) {
-                  <option [value]="pet.id">{{ pet.name }} · {{ pet.species }}</option>
+                  <ion-select-option [value]="pet.id">{{ pet.name }} · {{ pet.species }}</ion-select-option>
                 }
-              </select>
+              </ion-select>
 
-              <label for="care-plan-type">Tipo de cuidado</label>
-              <select id="care-plan-type" name="carePlanType" [ngModel]="carePlanType" (ngModelChange)="actualizarTipoCuidado($event)" required>
-                @for (type of carePlanTypes; track type) { <option [value]="type">{{ type }}</option> }
-              </select>
+              <ion-select id="care-plan-type" name="carePlanType" label="Tipo de cuidado" labelPlacement="stacked" fill="outline" interface="popover" [ngModel]="carePlanType" (ngModelChange)="actualizarTipoCuidado($event)" required>
+                @for (type of carePlanTypes; track type) { <ion-select-option [value]="type">{{ type }}</ion-select-option> }
+              </ion-select>
 
               @if (carePlanType !== 'Control de salud') {
-                <label for="care-plan-title">Nombre o motivo</label>
-                <input id="care-plan-title" name="carePlanTitle" type="text" [(ngModel)]="carePlanTitle" required maxlength="100"
+                <ion-input id="care-plan-title" name="carePlanTitle" type="text" label="Nombre o motivo" labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanTitle" required maxlength="100"
                   [placeholder]="carePlanType === 'Medicamento' ? 'Ej.: Antiparasitario' : carePlanType === 'Cita veterinaria' ? 'Ej.: Revisión anual' : carePlanType">
+                </ion-input>
               }
 
-              <label for="care-plan-date">{{ carePlanType === 'Control de salud' ? 'Fecha del control' : 'Fecha y hora del recordatorio' }}</label>
-              <input id="care-plan-date" name="carePlanDueAt" type="datetime-local" [(ngModel)]="carePlanDueAt" required>
+              <ion-input id="care-plan-date" name="carePlanDueAt" type="datetime-local" [label]="carePlanType === 'Control de salud' ? 'Fecha del control' : 'Fecha y hora del recordatorio'" labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanDueAt" required>
+              </ion-input>
 
               @if (carePlanType === 'Control de salud') {
                 <div class="care-input-columns">
                   <div>
-                    <label for="care-plan-weight">Peso en kg</label>
-                    <input id="care-plan-weight" name="carePlanWeight" type="number" min="0.01" max="300" step="0.01" [(ngModel)]="carePlanWeight" placeholder="Ej.: 8.5">
+                    <ion-input id="care-plan-weight" name="carePlanWeight" type="number" min="0.01" max="300" step="0.01" label="Peso en kg" labelPlacement="stacked" fill="outline" [ngModel]="carePlanWeight" (ngModelChange)="carePlanWeight = numeroOpcional($event)" placeholder="Ej.: 8.5"></ion-input>
                   </div>
                   <div>
-                    <label for="care-plan-temperature">Temperatura °C</label>
-                    <input id="care-plan-temperature" name="carePlanTemperature" type="number" min="20" max="50" step="0.1" [(ngModel)]="carePlanTemperature" placeholder="Ej.: 38.5">
+                    <ion-input id="care-plan-temperature" name="carePlanTemperature" type="number" min="20" max="50" step="0.1" label="Temperatura °C" labelPlacement="stacked" fill="outline" [ngModel]="carePlanTemperature" (ngModelChange)="carePlanTemperature = numeroOpcional($event)" placeholder="Ej.: 38.5"></ion-input>
                   </div>
                 </div>
               }
 
-              <label for="care-plan-details">{{ carePlanType === 'Medicamento' ? 'Dosis y frecuencia' : carePlanType === 'Cita veterinaria' ? 'Veterinaria o notas' : 'Notas' }} <span>(opcional)</span></label>
-              <textarea id="care-plan-details" name="carePlanDetails" [(ngModel)]="carePlanDetails" maxlength="500"
-                [placeholder]="carePlanType === 'Medicamento' ? 'Ej.: 1 tableta con la comida, cada 24 horas' : carePlanType === 'Cita veterinaria' ? 'Ej.: Clínica y motivo de consulta' : 'Agrega un detalle útil para recordar'"></textarea>
+              <ion-textarea id="care-plan-details" name="carePlanDetails" [label]="(carePlanType === 'Medicamento' ? 'Dosis y frecuencia' : carePlanType === 'Cita veterinaria' ? 'Veterinaria o notas' : 'Notas') + ' (opcional)'" labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanDetails" maxlength="500" autoGrow="true"
+                [placeholder]="carePlanType === 'Medicamento' ? 'Ej.: 1 tableta con la comida, cada 24 horas' : carePlanType === 'Cita veterinaria' ? 'Ej.: Clínica y motivo de consulta' : 'Agrega un detalle útil para recordar'"></ion-textarea>
 
               @if (carePlanMessage()) { <p class="care-feedback" role="status">{{ carePlanMessage() }}</p> }
               @if (carePlan.loadError()) { <p class="care-feedback care-feedback-error" role="alert">No se pudieron leer los cuidados guardados. <button type="button" (click)="carePlan.reload()">Reintentar</button></p> }
@@ -915,32 +912,27 @@
               <h2>Anotar una atención realizada</h2>
               <p>Registra algo que ya ocurrió. Para agendar citas, vacunas o medicamentos futuros, usa la pestaña Cuidados.</p>
 
-              <label>
-                Mascota
-                <select name="historyPet" [ngModel]="historialMascotaId()" (ngModelChange)="seleccionarMascotaHistorial($event)">
-                  @for (pet of petStore.pets(); track pet.id) {
-                    <option [value]="pet.id">{{ pet.name }}</option>
-                  }
-                </select>
-              </label>
+              <ion-select name="historyPet" label="Mascota" labelPlacement="stacked" fill="outline" interface="popover" [ngModel]="historialMascotaId()" (ngModelChange)="seleccionarMascotaHistorial($event)">
+                @for (pet of petStore.pets(); track pet.id) {
+                  <ion-select-option [value]="pet.id">{{ pet.name }}</ion-select-option>
+                }
+              </ion-select>
 
-              <label>
-                Tipo de actividad
-                <select name="historyCategory" [(ngModel)]="historyCategory">
-                  @for (category of activityTypes; track category) {
-                    <option [value]="category">{{ category }}</option>
-                  }
-                </select>
-              </label>
+              <ion-select name="historyCategory" label="Tipo de actividad" labelPlacement="stacked" fill="outline" interface="popover" [(ngModel)]="historyCategory">
+                @for (category of activityTypes; track category) {
+                  <ion-select-option [value]="category">{{ category }}</ion-select-option>
+                }
+              </ion-select>
 
-              <label>
-                Atención o actividad completada
-                <textarea
-                  name="completedCare"
-                  [(ngModel)]="cuidadoRealizado"
-                  placeholder="Ej.: visita veterinaria, vacuna aplicada o paseo">
-                </textarea>
-              </label>
+              <ion-textarea
+                name="completedCare"
+                label="Atención o actividad completada"
+                labelPlacement="stacked"
+                fill="outline"
+                [(ngModel)]="cuidadoRealizado"
+                placeholder="Ej.: visita veterinaria, vacuna aplicada o paseo"
+                autoGrow="true">
+              </ion-textarea>
 
               <button
                 type="button"
@@ -955,15 +947,16 @@
               <small>DIARIO AUDIOVISUAL</small>
               <h2>Agregar video de {{ mascotaHistorialSeleccionada()?.name || 'la mascota' }}</h2>
               <p>Guarda un clip corto para documentar movimiento, conducta o evolución. El video queda en este dispositivo.</p>
-              <label>
-                Nota del video <span>(opcional)</span>
-                <input
-                  type="text"
-                  name="videoCaption"
-                  [(ngModel)]="videoCaption"
-                  maxlength="120"
-                  placeholder="Ej.: seguimiento de su forma de caminar">
-              </label>
+              <ion-input
+                type="text"
+                name="videoCaption"
+                label="Nota del video (opcional)"
+                labelPlacement="stacked"
+                fill="outline"
+                [(ngModel)]="videoCaption"
+                maxlength="120"
+                placeholder="Ej.: seguimiento de su forma de caminar">
+              </ion-input>
               <div class="video-entry-actions">
                 <button class="video-add-button" type="button" (click)="agregarVideoHistorial()" [disabled]="savingVideo()">
                   {{ savingVideo() ? 'AGREGANDO…' : 'AGREGAR VIDEO' }}
@@ -1039,11 +1032,11 @@
                       <button type="button" (click)="alternarReproduccionVideo(clip.id, selectedVideoPlayer)" [attr.aria-label]="playingVideoId() === clip.id ? 'Pausar video' : 'Reproducir video'">
                         {{ playingVideoId() === clip.id ? '❚❚' : '▶' }}
                       </button>
-                      <input type="range" min="0" [max]="selectedVideoPlayer.duration || clip.durationSeconds" [value]="posicionVideo(clip.id)" [attr.aria-label]="'Posición del video de ' + clip.petName" (input)="buscarVideo(selectedVideoPlayer, $event)">
+                      <ion-range min="0" [max]="selectedVideoPlayer.duration || clip.durationSeconds" [value]="posicionVideo(clip.id)" [attr.aria-label]="'Posición del video de ' + clip.petName" (ionInput)="buscarVideo(selectedVideoPlayer, $event)"></ion-range>
                       <small>{{ formatearTiempoVideo(posicionVideo(clip.id)) }} / {{ formatearTiempoVideo(selectedVideoPlayer.duration || clip.durationSeconds) }}</small>
                       <button type="button" (click)="cambiarVelocidadVideo(selectedVideoPlayer)" [attr.aria-label]="'Velocidad ' + selectedVideoPlayer.playbackRate">{{ selectedVideoPlayer.playbackRate }}×</button>
                       <button type="button" (click)="alternarSilencioVideo(selectedVideoPlayer)" [attr.aria-label]="selectedVideoPlayer.muted ? 'Activar sonido' : 'Silenciar'">{{ selectedVideoPlayer.muted ? '🔇' : '🔊' }}</button>
-                      <input class="video-volume" type="range" min="0" max="1" step="0.05" [value]="selectedVideoPlayer.muted ? 0 : selectedVideoPlayer.volume" [attr.aria-label]="'Volumen del video de ' + clip.petName" (input)="ajustarVolumenVideo(selectedVideoPlayer, $event)">
+                      <ion-range class="video-volume" min="0" max="1" step="0.05" [value]="selectedVideoPlayer.muted ? 0 : selectedVideoPlayer.volume" [attr.aria-label]="'Volumen del video de ' + clip.petName" (ionInput)="ajustarVolumenVideo(selectedVideoPlayer, $event)"></ion-range>
                       <button type="button" (click)="expandirVideo(selectedVideoPlayer)" aria-label="Pantalla completa">⛶</button>
                     </div>
                   </div>
@@ -1216,31 +1209,13 @@
           </p>
 
           <div class="check-list">
-            <label>
-              <input
-                type="checkbox"
-                checked>
-              Datos generales
-            </label>
+            <ion-checkbox checked="true" labelPlacement="end">Datos generales</ion-checkbox>
 
-            <label>
-              <input
-                type="checkbox"
-                checked>
-              Vacunas y consultas
-            </label>
+            <ion-checkbox checked="true" labelPlacement="end">Vacunas y consultas</ion-checkbox>
 
-            <label>
-              <input
-                type="checkbox"
-                checked>
-              Historial del sensor
-            </label>
+            <ion-checkbox checked="true" labelPlacement="end">Historial del sensor</ion-checkbox>
 
-            <label>
-              <input type="checkbox">
-              Información de contacto
-            </label>
+            <ion-checkbox labelPlacement="end">Información de contacto</ion-checkbox>
           </div>
 
           <div class="privacy">

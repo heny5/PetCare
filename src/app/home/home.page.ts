@@ -28,10 +28,16 @@ import { Camera, CameraErrorCode, EncodingType, MediaType, MediaTypeSelection } 
 import { DeviceLinkService, type NfcReadResult } from '../services/device-link.service';
 import {
   IonContent,
+  IonCheckbox,
   IonIcon,
+  IonInput,
   IonPopover,
+  IonRange,
   IonRefresher,
   IonRefresherContent,
+  IonSelect,
+  IonSelectOption,
+  IonTextarea,
   RefresherCustomEvent,
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
@@ -90,10 +96,16 @@ interface HistorialEvent {
     CommonModule,
     FormsModule,
     IonContent,
+    IonCheckbox,
     IonIcon,
+    IonInput,
     IonPopover,
+    IonRange,
     IonRefresher,
     IonRefresherContent,
+    IonSelect,
+    IonSelectOption,
+    IonTextarea,
     RouterLink
   ],
 })
@@ -571,6 +583,12 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     return { name: '', species: 'Perro', breed: '', sex: 'Sin especificar', ageYears: null, weightKg: null };
   }
 
+  numeroOpcional(value: string | number | null | undefined): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
   async conectar(deviceId: string): Promise<void> {
     try {
       await this.deviceLink.connectBluetooth(deviceId);
@@ -830,13 +848,15 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     if (this.playingVideoId() === id) this.playingVideoId.set('');
   }
 
-  buscarVideo(player: HTMLVideoElement, event: Event): void {
-    const value = Number((event.target as HTMLInputElement).value);
+  buscarVideo(player: HTMLVideoElement, event: CustomEvent<{ value: unknown }>): void {
+    const rawValue = event.detail.value;
+    const value = Number(Array.isArray(rawValue) ? rawValue[0] : rawValue);
     if (Number.isFinite(value)) player.currentTime = value;
   }
 
-  ajustarVolumenVideo(player: HTMLVideoElement, event: Event): void {
-    player.volume = Number((event.target as HTMLInputElement).value);
+  ajustarVolumenVideo(player: HTMLVideoElement, event: CustomEvent<{ value: unknown }>): void {
+    const rawValue = event.detail.value;
+    player.volume = Number(Array.isArray(rawValue) ? rawValue[0] : rawValue);
     player.muted = false;
   }
 

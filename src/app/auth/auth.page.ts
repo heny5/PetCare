@@ -1,14 +1,14 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { IonContent } from '@ionic/angular';
+import { IonContent, IonInput } from '@ionic/angular';
 import { AuthService } from '../services/auth.service';
 
 @Component({
   selector: 'app-auth-page',
   templateUrl: './auth.page.html',
   styleUrl: './auth.page.scss',
-  imports: [FormsModule, IonContent],
+  imports: [FormsModule, IonContent, IonInput],
 })
 export class AuthPage {
   private readonly auth = inject(AuthService);

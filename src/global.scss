@@ -177,3 +177,5 @@ ion-popover.user-popover .logout-button:active {
 .video-dialog .pet-video-player video { max-height: 48dvh; }
 .video-dialog-date { margin: 9px 2px 0; color: var(--muted); font-size: 10px; }
 @media (max-width: 390px) { .video-album-grid { gap: 7px; }.video-album { padding: 12px; }.video-dialog { padding: 10px; }.video-dialog .pet-video-controls { gap: 4px; padding: 6px; } }
+.care-planner-form ion-input,.care-planner-form ion-select,.care-planner-form ion-textarea { box-sizing: border-box; display: block; width: 100%; margin: 8px 0 14px; --background: #fbfdfc; --border-color: #bdcfc8; --border-radius: 11px; --color: var(--ink); --highlight-color-focused: var(--green); --padding-start: 12px; --padding-end: 12px; font-size: 13px; }
+.care-planner-form ion-textarea { min-height: 74px; }
