@@ -1,77 +1,67 @@
-import { Injectable, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
-import { environment } from '../../environments/environment';
-import { ConnectivityService } from './connectivity.service';
-import { DEMO_PETS, PetDraft, StoredPet, isPet, isPetDraft } from './pet.model';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { AuthService } from './auth.service';
+import { DatabaseService } from './database.service';
+import { PetDraft, StoredPet, isPetDraft } from './pet.model';
 
 @Injectable({ providedIn: 'root' })
-export class PetService implements OnDestroy {
-  private static readonly storageKey = 'petcare.pets';
-  private readonly connectivity = inject(ConnectivityService);
+export class PetService {
+  private readonly auth = inject(AuthService);
+  private readonly database = inject(DatabaseService);
   readonly storageError = signal(false);
-  private readonly records = signal<StoredPet[]>(this.readRecords());
-  private readonly active = signal(this.records().some((pet) => pet.pending));
-  private task: Promise<void> | undefined;
-  private retryTimer: ReturnType<typeof setTimeout> | undefined;
-  private request: AbortController | undefined;
-  private destroyed = false;
-
-  readonly pets = computed(() => {
-    const pets = new Map([...DEMO_PETS, ...this.records()].map((pet) => [pet.id, pet]));
-    return [...pets.values()].filter((pet) => !pet.deleted);
-  });
-  readonly pendingCount = computed(() => this.records().filter((pet) => pet.pending).length);
+  private readonly records = signal<StoredPet[]>([]);
+  private readonly loadedUser = signal<string | null>(null);
+  readonly pets = computed(() => this.loadedUser() === this.auth.currentUser()?.trim()
+    ? this.records().filter((pet) => !pet.deleted)
+    : []);
+  readonly pendingCount = computed(() => this.loadedUser() === this.auth.currentUser()?.trim()
+    ? this.records().filter((pet) => pet.pending).length
+    : 0);
   readonly isSynchronizing = signal(false);
   readonly syncError = signal(false);
+  private loadTask: Promise<void> | undefined;
 
-  constructor() {
-    effect(() => {
-      const active = this.active();
-      const online = this.connectivity.isOnline();
-      untracked(() => {
-        this.clearRetry();
-        if (active && online) void this.sync();
-        else this.request?.abort();
-      });
+  activate(): void {
+    const username = this.auth.currentUser()?.trim();
+    if (!username || username === this.loadedUser() || this.loadTask) return;
+    this.records.set([]);
+    this.loadTask = this.loadUserPets(username).finally(() => {
+      this.loadTask = undefined;
+      const activeUsername = this.auth.currentUser()?.trim();
+      if (activeUsername && activeUsername !== username) this.activate();
     });
   }
 
-  activate(): void {
-    this.active.set(true);
-    void this.sync();
+  async sync(): Promise<void> {
+    await this.reloadCurrentUserPets();
   }
 
-  add(draft: PetDraft): StoredPet {
+  async add(draft: PetDraft): Promise<StoredPet> {
     if (!isPetDraft(draft)) throw new Error('Revisa el nombre, la especie, el sexo, la edad y el peso.');
-    if (this.storageError()) throw new Error('No se pudieron leer las mascotas guardadas.');
-    const pet: StoredPet = {
-      ...draft, name: draft.name.trim(), breed: draft.breed.trim(),
-      id: crypto.randomUUID(), createdAt: new Date().toISOString(), pending: true,
-    };
-    // Persist before changing the list or starting a network request.
-    this.writeRecords([...this.records(), pet]);
-    this.activate();
+    const { userId, username } = await this.ensureCurrentUserLoaded();
+    const pet = await this.database.addPet(userId, draft);
+    await this.reloadPets(userId, username);
     return pet;
   }
 
-  update(id: string, draft: PetDraft): StoredPet {
+  async update(id: string, draft: PetDraft): Promise<StoredPet> {
     if (!isPetDraft(draft)) throw new Error('Revisa los datos de la mascota.');
+    const { userId, username } = await this.ensureCurrentUserLoaded();
     const current = this.requirePet(id);
+    await this.database.updatePet(userId, id, draft);
     const pet: StoredPet = {
       ...current, ...draft, id: current.id, createdAt: current.createdAt,
       name: draft.name.trim(), breed: draft.breed.trim(),
-      pending: !id.startsWith('demo-'), operation: 'PUT',
+      pending: false,
     };
-    this.writeRecords([...this.records().filter((item) => item.id !== id), pet]);
-    this.activate();
+    await this.reloadPets(userId, username);
     return pet;
   }
 
-  remove(id: string): void {
-    const current = this.requirePet(id);
-    this.writeRecords([...this.records().filter((item) => item.id !== id), {
-      ...current, deleted: true, pending: !id.startsWith('demo-'),
-    }]);
-    this.activate();
+  async remove(id: string): Promise<void> {
+    const { userId, username } = await this.ensureCurrentUserLoaded();
+    this.requirePet(id);
+    await this.database.deletePet(userId, id);
+    await this.reloadPets(userId, username);
   }
 
   private requirePet(id: string): StoredPet {
@@ -81,97 +71,74 @@ export class PetService implements OnDestroy {
     return pet;
   }
 
-  sync(): Promise<void> {
-    if (this.task) return this.task;
-    if (this.destroyed || !this.active() || !this.connectivity.isOnline() || this.storageError()) {
-      return Promise.resolve();
-    }
-    this.clearRetry();
+  private async loadUserPets(username: string): Promise<void> {
     this.isSynchronizing.set(true);
+    this.storageError.set(false);
     this.syncError.set(false);
-    this.task = this.synchronize().catch(() => {
-      if (!this.destroyed) this.syncError.set(this.connectivity.isOnline());
-    }).finally(() => {
-      this.task = undefined;
-      this.isSynchronizing.set(false);
-      if (!this.destroyed && this.connectivity.isOnline() && (this.pendingCount() || this.syncError())) {
-        this.retryTimer = setTimeout(() => {
-          this.retryTimer = undefined;
-          void this.sync();
-        }, 15_000);
-      }
-    });
-    return this.task;
-  }
-
-  ngOnDestroy(): void {
-    this.destroyed = true;
-    this.clearRetry();
-    this.request?.abort();
-  }
-
-  private async synchronize(): Promise<void> {
-    const remote: unknown = await this.fetchJson();
-    if (!Array.isArray(remote) || !remote.every(isPet)) throw new Error('Invalid pet list');
-    const merged = new Map(this.records().map((pet) => [pet.id, pet]));
-    for (const pet of remote) {
-      if (!DEMO_PETS.some((demo) => demo.id === pet.id) && !merged.get(pet.id)?.pending && !merged.get(pet.id)?.deleted) {
-        merged.set(pet.id, { ...pet, pending: false });
-      }
-    }
-    this.writeRecords([...merged.values()]);
-    while (!this.destroyed && this.connectivity.isOnline()) {
-      const pet = this.records().find((item) => item.pending);
-      if (!pet) break;
-      await this.fetchJson({
-        method: pet.deleted ? 'DELETE' : pet.operation ?? 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: pet.id, name: pet.name, species: pet.species, breed: pet.breed,
-          sex: pet.sex, ageYears: pet.ageYears, weightKg: pet.weightKg, createdAt: pet.createdAt,
-        }),
-      }, pet.deleted || pet.operation ? `/${encodeURIComponent(pet.id)}` : '');
-      // A change made during the request must remain pending for the next pass.
-      this.writeRecords(this.records().map((item) => item === pet ? { ...item, pending: false } : item));
-    }
-  }
-
-  private async fetchJson(options?: RequestInit, suffix = ''): Promise<unknown> {
-    const controller = new AbortController();
-    this.request = controller;
-    const timeout = setTimeout(() => controller.abort(), 10_000);
     try {
-      const response = await fetch(environment.petsApiUrl + suffix, { ...options, signal: controller.signal });
-      if (!response.ok) throw new Error('Pet request failed');
-      return await response.json();
-    } finally {
-      clearTimeout(timeout);
-      this.request = undefined;
-    }
-  }
-
-  private readRecords(): StoredPet[] {
-    try {
-      const stored: unknown = JSON.parse(localStorage.getItem(PetService.storageKey) ?? '[]');
-      if (!Array.isArray(stored) || !stored.every((pet) => isPet(pet) && typeof (pet as StoredPet).pending === 'boolean')) {
-        throw new Error('Invalid stored pets');
-      }
-      return stored;
+      await this.database.initialize();
+      const userId = await this.database.getUserId(username);
+      if (userId === null) throw new Error('No se encontró la cuenta activa.');
+      const pets = await this.database.listPets(userId);
+      if (this.auth.currentUser()?.trim() !== username) return;
+      this.records.set(pets);
+      this.loadedUser.set(username);
     } catch {
       this.storageError.set(true);
-      return [];
+      this.records.set([]);
+    } finally {
+      this.isSynchronizing.set(false);
     }
   }
 
-  private writeRecords(records: StoredPet[]): void {
-    localStorage.setItem(PetService.storageKey, JSON.stringify(records));
-    this.records.set(records);
+  private async reloadPets(userId: number, username: string): Promise<void> {
+    const pets = await this.database.listPets(userId);
+    if (this.auth.currentUser()?.trim() !== username) return;
+    this.records.set(pets);
+    this.loadedUser.set(username);
   }
 
-  private clearRetry(): void {
-    if (this.retryTimer !== undefined) {
-      clearTimeout(this.retryTimer);
-      this.retryTimer = undefined;
+  private async reloadCurrentUserPets(): Promise<void> {
+    const username = this.auth.currentUser()?.trim();
+    if (!username) {
+      this.records.set([]);
+      this.loadedUser.set(null);
+      return;
     }
+    this.loadedUser.set(null);
+    this.loadTask = this.loadUserPets(username);
+    await this.loadTask;
+    this.loadTask = undefined;
+  }
+
+  private async getCurrentUser(): Promise<{ userId: number; username: string }> {
+    const username = this.auth.currentUser()?.trim();
+    if (!username) throw new Error('Debes iniciar sesión para modificar tus mascotas.');
+    await this.database.initialize();
+    const userId = await this.database.getUserId(username);
+    if (userId === null) throw new Error('No se encontró la cuenta activa.');
+    if (this.auth.currentUser()?.trim() !== username) throw new Error('La sesión cambió durante la operación.');
+    return { userId, username };
+  }
+
+  private async ensureCurrentUserLoaded(): Promise<{ userId: number; username: string }> {
+    const user = await this.getCurrentUser();
+    const { username } = user;
+    while (this.loadedUser() !== username) {
+      if (this.storageError()) throw new Error('No se pudieron leer las mascotas guardadas.');
+      if (!this.loadTask) {
+        const task = this.loadUserPets(username);
+        this.loadTask = task;
+        try {
+          await task;
+        } finally {
+          if (this.loadTask === task) this.loadTask = undefined;
+        }
+      } else {
+        await this.loadTask;
+      }
+      if (this.auth.currentUser()?.trim() !== username) throw new Error('La sesión cambió durante la operación.');
+    }
+    return user;
   }
 }
