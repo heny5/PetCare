@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { AfterViewInit, Component, ViewChild } from '@angular/core';
 import { HomePage } from '../home/home.page';
 
 @Component({
@@ -7,4 +7,14 @@ import { HomePage } from '../home/home.page';
   styleUrls: ['./tab-page.scss'],
   imports: [HomePage],
 })
-export class PetsTabPage {}
+export class PetsTabPage implements AfterViewInit {
+  @ViewChild(HomePage) private homePage?: HomePage;
+
+  ngAfterViewInit(): void {
+    this.homePage?.activarPestana('mascotas');
+  }
+
+  ionViewWillEnter(): void {
+    this.homePage?.activarPestana('mascotas');
+  }
+}

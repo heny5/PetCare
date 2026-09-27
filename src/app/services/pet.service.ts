@@ -1,13 +1,14 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { DatabaseService } from './database.service';
-import { PetDraft, StoredPet, isPetDraft } from './pet.model';
+import { PetDraft, StoredPet, isPet, isPetDraft } from './pet.model';
 
 @Injectable({ providedIn: 'root' })
 export class PetService {
   private readonly auth = inject(AuthService);
   private readonly database = inject(DatabaseService);
   readonly storageError = signal(false);
+  readonly storageErrorDetail = signal('');
   private readonly records = signal<StoredPet[]>([]);
   private readonly loadedUser = signal<string | null>(null);
   readonly pets = computed(() => this.loadedUser() === this.auth.currentUser()?.trim()
@@ -74,21 +75,47 @@ export class PetService {
   private async loadUserPets(username: string): Promise<void> {
     this.isSynchronizing.set(true);
     this.storageError.set(false);
+    this.storageErrorDetail.set('');
     this.syncError.set(false);
     try {
       await this.database.initialize();
       const userId = await this.database.getUserId(username);
       if (userId === null) throw new Error('No se encontró la cuenta activa.');
-      const pets = await this.database.listPets(userId);
+      let pets = await this.database.listPets(userId);
+      if (pets.length === 0) {
+        pets = await this.migrateLegacyPets(userId);
+      }
       if (this.auth.currentUser()?.trim() !== username) return;
       this.records.set(pets);
       this.loadedUser.set(username);
-    } catch {
+    } catch (error) {
+      console.error('No se pudieron cargar las mascotas desde SQLite.', error);
+      this.storageErrorDetail.set(error instanceof Error ? error.message : String(error));
       this.storageError.set(true);
       this.records.set([]);
     } finally {
       this.isSynchronizing.set(false);
     }
+  }
+
+  private async migrateLegacyPets(userId: number): Promise<StoredPet[]> {
+    const migrationKey = 'petcare.legacy-pets-migrated';
+    if (localStorage.getItem(migrationKey)) return [];
+
+    const legacyData = localStorage.getItem('petcare.pets');
+    if (legacyData === null) return [];
+
+    const parsed: unknown = JSON.parse(legacyData);
+    if (!Array.isArray(parsed)) throw new Error('Los perfiles anteriores tienen un formato inválido.');
+    const legacyPets = parsed.filter((pet): pet is StoredPet =>
+      isPet(pet) && !(pet as StoredPet).deleted
+    );
+    const migrated: StoredPet[] = [];
+    for (const pet of legacyPets) {
+      migrated.push(await this.database.addPet(userId, pet));
+    }
+    localStorage.setItem(migrationKey, 'true');
+    return migrated;
   }
 
   private async reloadPets(userId: number, username: string): Promise<void> {

@@ -19,7 +19,10 @@ export class DatabaseService {
   private initialization?: Promise<void>;
 
   initialize(): Promise<void> {
-    this.initialization ??= this.openDatabase();
+    this.initialization ??= this.openDatabase().catch((error: unknown) => {
+      this.initialization = undefined;
+      throw error;
+    });
     return this.initialization;
   }
 
@@ -124,10 +127,20 @@ export class DatabaseService {
 
   private async openDatabase(): Promise<void> {
     if (Capacitor.getPlatform() === 'web') {
-      const { defineCustomElements } = await import('jeep-sqlite/loader');
-      await defineCustomElements(window);
       await customElements.whenDefined('jeep-sqlite');
-      document.body.appendChild(document.createElement('jeep-sqlite'));
+      let jeepSqlite = document.querySelector('jeep-sqlite') as (HTMLElement & {
+        componentOnReady?: () => Promise<unknown>;
+        isStoreOpen: () => Promise<boolean>;
+      }) | null;
+      if (!jeepSqlite) {
+        jeepSqlite = document.createElement('jeep-sqlite') as HTMLElement & {
+          componentOnReady?: () => Promise<unknown>;
+          isStoreOpen: () => Promise<boolean>;
+        };
+        document.body.appendChild(jeepSqlite);
+      }
+      await jeepSqlite.componentOnReady?.();
+      await this.waitForWebStore(jeepSqlite);
       await this.sqlite.initWebStore();
     }
 
@@ -160,5 +173,14 @@ export class DatabaseService {
       );
       CREATE INDEX IF NOT EXISTS idx_pets_user_id ON pets(user_id);
     `);
+  }
+
+  private async waitForWebStore(element: HTMLElement & { isStoreOpen: () => Promise<boolean> }): Promise<void> {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      if (await element.isStoreOpen()) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error('jeep-sqlite no pudo abrir el almacenamiento IndexedDB del navegador.');
   }
 }

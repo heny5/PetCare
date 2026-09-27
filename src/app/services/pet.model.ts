@@ -27,13 +27,3 @@ export function isPet(value: unknown): value is Pet {
   return typeof pet.id === 'string' && !!pet.id.trim() &&
     typeof pet.createdAt === 'string' && Number.isFinite(Date.parse(pet.createdAt));
 }
-export const DEMO_PETS: readonly StoredPet[] = [
-  {
-    id: 'demo-luna', name: 'Luna', species: 'Perro', breed: 'Beagle', sex: 'Hembra',
-    ageYears: 4, weightKg: 12.4, createdAt: '2026-01-01T00:00:00.000Z', pending: false,
-  },
-  {
-    id: 'demo-milo', name: 'Milo', species: 'Gato', breed: 'Gato criollo', sex: 'Macho',
-    ageYears: 2, weightKg: null, createdAt: '2026-01-01T00:00:00.000Z', pending: false,
-  },
-];

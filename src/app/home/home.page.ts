@@ -22,6 +22,7 @@ import type {
 } from '@capacitor/core';
 
 import { Camera, CameraErrorCode, EncodingType, MediaTypeSelection } from '@capacitor/camera';
+import { DeviceLinkService, type NfcReadResult } from '../services/device-link.service';
 import {
   IonContent,
   IonIcon,
@@ -86,9 +87,11 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   private readonly router = inject(Router);
   vista: Vista = 'inicio';
 
-  dispositivoConectado = false;
-  lecturaNfc = false;
+  readonly nfcReadResult = signal<NfcReadResult | null>(null);
+  readonly nfcSharedPet = signal<{ id: string; name: string; species: string; breed: string } | null>(null);
+  readonly nfcMatchedPet = signal<StoredPet | undefined>(undefined);
   readonly careRecords = inject(CareRecordService);
+  readonly deviceLink = inject(DeviceLinkService);
   readonly petStore = inject(PetService);
   readonly totalPendientes = computed(() => this.careRecords.pendingCount() + this.petStore.pendingCount());
   readonly especies = PET_SPECIES;
@@ -98,7 +101,8 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   readonly fotosMascota = signal<Record<string, string>>(this.leerFotosMascota());
   readonly errorFoto = signal('');
   readonly opcionesFotoAbiertas = signal(false);
-  private readonly mascotaId = signal('demo-luna');
+  readonly usuarioMenuAbierto = signal(false);
+  private readonly mascotaId = signal('');
   readonly mascotaSeleccionada = computed<StoredPet | undefined>(() =>
     this.petStore.pets().find((pet) => pet.id === this.mascotaId()) ?? this.petStore.pets()[0]
   );
@@ -120,9 +124,16 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   get mensaje(): string { return this.mensajeLocal(); }
   set mensaje(value: string) { this.mensajeLocal.set(value); }
   get enLinea(): boolean { return this.connectivity.isOnline(); }
-  get modoDemostracion(): boolean { return this.connectivity.isDemoMode(); }
   get sincronizando(): boolean { return this.careRecords.isSynchronizing(); }
   get pendientes() { return this.registrosPendientes(); }
+  get buscandoBluetooth(): boolean { return this.deviceLink.isScanningBluetooth(); }
+  get dispositivoEncontrado(): boolean { return this.deviceLink.bluetoothDevices().length > 0; }
+  get dispositivoConectado(): boolean { return this.deviceLink.connectedBluetoothDeviceId().length > 0; }
+  get nombreDispositivoConectado(): string {
+    const id = this.deviceLink.connectedBluetoothDeviceId();
+    const result = this.deviceLink.bluetoothDevices().find((item) => item.device.deviceId === id);
+    return result?.device.name || result?.localName || 'Dispositivo BLE';
+  }
   get registrosDelServidor() {
     const nombre = this.nombreMascota.trim().toLocaleLowerCase();
     return this.careRecords.serverRecords().filter((record) =>
@@ -136,14 +147,11 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }) : '';
   }
 
-  buscandoBluetooth = false;
-  dispositivoEncontrado = false;
-
   mascotaPerdida = false;
   fechaAlertaPerdida = '';
   hallazgoRegistrado = false;
 
-  nombreMascota = 'Luna';
+  nombreMascota = '';
   cuidadoRealizado = '';
 
   alertas: AlertaCollar[] = [
@@ -171,7 +179,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       titulo:
         'Actividad fuera de lo normal',
       detalle:
-        'Luna permaneció inactiva más tiempo de lo habitual.',
+        'La mascota permaneció inactiva más tiempo de lo habitual.',
       hora: 'Ayer · 9:10 p. m.',
       revisada: true
     }
@@ -204,6 +212,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     this.cargarEstadoLocal();
+    if (this.initialView === 'inicio') this.petStore.activate();
     try {
       const estado = await Network.getStatus();
       if (this.destroyed) return;
@@ -228,6 +237,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   async cerrarSesion(popover: IonPopover): Promise<void> {
     await popover.dismiss();
+    this.usuarioMenuAbierto.set(false);
     this.auth.logout();
     await this.router.navigateByUrl('/login', { replaceUrl: true });
   }
@@ -237,7 +247,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.mascotaPorEliminar = null;
     this.vista = vista;
     this.mensaje = '';
-    if (vista === 'mascotas') this.petStore.activate();
+    if (vista === 'mascotas' || vista === 'nfc') this.petStore.activate();
     if (vista === 'historial') void this.careRecords.loadRecords();
 
     const tabRoute: Partial<Record<Vista, string>> = {
@@ -254,9 +264,14 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   ngOnChanges(): void {
     if (!this.initialView) return;
-    this.vista = this.initialView;
-    if (this.vista === 'mascotas') this.petStore.activate();
-    if (this.vista === 'historial') void this.careRecords.loadRecords();
+    this.activarPestana(this.initialView);
+  }
+
+  activarPestana(vista: Vista): void {
+    this.vista = vista;
+    this.mascotaPorEliminar = null;
+    if (vista === 'mascotas' || vista === 'nfc') this.petStore.activate();
+    if (vista === 'historial') void this.careRecords.loadRecords();
   }
 
   async actualizarContenido(event: RefresherCustomEvent): Promise<void> {
@@ -421,43 +436,111 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     return { name: '', species: 'Perro', breed: '', sex: 'Sin especificar', ageYears: null, weightKg: null };
   }
 
-  conectar(): void {
-    this.dispositivoConectado = true;
-
-    this.mensaje =
-      'Collar PetCare vinculado correctamente.';
+  async conectar(deviceId: string): Promise<void> {
+    try {
+      await this.deviceLink.connectBluetooth(deviceId);
+      this.mensaje = `Conectado a ${this.nombreDispositivoConectado}.`;
+    } catch {
+      this.mensaje = 'No se pudo conectar a este dispositivo Bluetooth LE.';
+    }
   }
 
-  buscarDispositivos(): void {
-    this.buscandoBluetooth = true;
-    this.dispositivoEncontrado = false;
-
-    this.mensaje =
-      'Buscando dispositivos Bluetooth LE cercanos…';
-
-    setTimeout(() => {
-      this.buscandoBluetooth = false;
-      this.dispositivoEncontrado = true;
-
-      this.mensaje =
-        'Se encontró 1 dispositivo compatible.';
-    }, 1200);
+  async buscarDispositivos(): Promise<void> {
+    this.mensaje = 'Buscando dispositivos Bluetooth LE cercanos…';
+    try {
+      await this.deviceLink.scanBluetooth();
+      const total = this.deviceLink.bluetoothDevices().length;
+      this.mensaje = total
+        ? `Se encontraron ${total} dispositivo(s) Bluetooth LE.`
+        : 'No se encontraron dispositivos. Acerca el collar e inténtalo de nuevo.';
+    } catch {
+      this.mensaje = 'No se pudo iniciar el escaneo Bluetooth. Revisa que Bluetooth esté activo y vuelve a intentar.';
+    }
   }
 
-  desconectar(): void {
-    this.dispositivoConectado = false;
-
-    this.mensaje =
-      'Collar PetCare desconectado.';
-
-    this.agregarAlertaDesconexion();
+  async desconectar(): Promise<void> {
+    try {
+      await this.deviceLink.disconnectBluetooth();
+      this.mensaje = 'Dispositivo Bluetooth desconectado.';
+      this.agregarAlertaDesconexion();
+    } catch {
+      this.mensaje = 'No se pudo desconectar el dispositivo Bluetooth.';
+    }
   }
 
-  simularNfc(): void {
-    this.lecturaNfc = true;
+  async leerEtiquetaNfc(): Promise<void> {
+    this.nfcReadResult.set(null);
+    this.nfcSharedPet.set(null);
+    this.nfcMatchedPet.set(undefined);
+    try {
+      const result = await this.deviceLink.readNfcTag();
+      this.nfcReadResult.set(result);
+      const profile = this.parseNfcPetProfile(result.text);
+      if (!profile) {
+        this.mensaje = result.text
+          ? 'Se leyó la etiqueta, pero no contiene una ficha PetCare compartida.'
+          : 'Se detectó una etiqueta NFC sin datos de texto.';
+        return;
+      }
 
-    this.mensaje =
-      'Etiqueta detectada: PET-LUNA-001';
+      this.nfcSharedPet.set(profile);
+      await this.petStore.sync();
+      const localPet = this.petStore.pets().find((pet) => pet.id === profile.id && pet.name === profile.name);
+      this.nfcMatchedPet.set(localPet);
+      this.mensaje = localPet
+        ? `Ficha NFC de ${profile.name} reconocida.`
+        : `Se leyó la ficha compartida de ${profile.name}.`;
+    } catch (error) {
+      this.mensaje = error instanceof Error ? error.message : 'No se pudo leer la etiqueta NFC.';
+    }
+  }
+
+  async compartirFichaNfc(): Promise<void> {
+    const pet = this.mascotaSeleccionada();
+    if (!pet) {
+      this.mensaje = 'Primero registra una mascota para compartir su ficha.';
+      return;
+    }
+    const profile = {
+      type: 'petcare-pet',
+      version: 1,
+      pet: { id: pet.id, name: pet.name, species: pet.species, breed: pet.breed },
+    };
+    try {
+      await this.deviceLink.writeNfcText(JSON.stringify(profile));
+      this.mensaje = `Ficha de ${pet.name} escrita en la etiqueta NFC.`;
+    } catch (error) {
+      this.mensaje = error instanceof Error ? error.message : 'No se pudo compartir la ficha por NFC.';
+    }
+  }
+
+  abrirMascotaLeidaNfc(): void {
+    this.seleccionarMascota(this.nfcMatchedPet());
+  }
+
+  private parseNfcPetProfile(text: string): { id: string; name: string; species: string; breed: string } | null {
+    try {
+      const value: unknown = JSON.parse(text);
+      if (!value || typeof value !== 'object') return null;
+      const payload = value as {
+        type?: unknown;
+        version?: unknown;
+        pet?: { id?: unknown; name?: unknown; species?: unknown; breed?: unknown };
+      };
+      if (
+        payload.type !== 'petcare-pet' || payload.version !== 1 || !payload.pet ||
+        typeof payload.pet.id !== 'string' || typeof payload.pet.name !== 'string' ||
+        typeof payload.pet.species !== 'string'
+      ) return null;
+      return {
+        id: payload.pet.id,
+        name: payload.pet.name,
+        species: payload.pet.species,
+        breed: typeof payload.pet.breed === 'string' ? payload.pet.breed : '',
+      };
+    } catch {
+      return null;
+    }
   }
 
   compartir(): void {
@@ -504,20 +587,6 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.connectivity.updateNetworkStatus(status.connected);
   }
 
-  cambiarConexionDemo(conectado: boolean): void {
-    this.connectivity.setDemoOnline(conectado);
-    this.mensaje = conectado
-      ? 'Modo demostración: conexión recuperada.'
-      : 'Modo demostración: ahora estás sin conexión.';
-    if (conectado) void this.careRecords.syncPending();
-  }
-
-  usarEstadoReal(): void {
-    this.connectivity.useRealNetwork();
-    this.mensaje = 'PetCare volvió a utilizar el estado real de la red.';
-    if (this.enLinea) void this.careRecords.syncPending();
-  }
-
   alternarMascotaPerdida(): void {
     this.mascotaPerdida =
       !this.mascotaPerdida;
@@ -538,7 +607,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.mensaje =
       this.mascotaPerdida
         ? 'Alerta activada. La lectura NFC mostrará la ficha de mascota perdida.'
-        : 'Luna fue marcada como encontrada. La alerta quedó desactivada.';
+        : `${this.nombreMascota || 'La mascota'} fue marcada como encontrada. La alerta quedó desactivada.`;
 
     this.guardarEstadoLocal();
   }
@@ -565,7 +634,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       );
 
     this.mensaje =
-      'Alerta marcada como revisada y añadida al historial de Luna.';
+      `Alerta marcada como revisada y añadida al historial de ${this.nombreMascota || 'la mascota'}.`;
 
     this.guardarEstadoLocal();
   }

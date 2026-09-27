@@ -30,13 +30,7 @@ npm run start:app
 
 ## Estado de red
 
-`ConnectivityService` comparte el estado entre la pantalla y la cola de sincronización. Utiliza los eventos del navegador y el estado de Capacitor recibido por `HomePage`.
-
-- **Red real**: es el modo inicial cuando no existe una selección de demostración guardada. Envía los pendientes al recuperar conexión o al seleccionar este modo estando conectado.
-- **En línea**: simula conexión e intenta enviar los pendientes.
-- **Offline**: simula desconexión y conserva los registros localmente, aunque el navegador tenga internet.
-
-La selección de demostración se conserva al recargar. Seleccionar **Red real** elimina esa selección guardada. El modo demostración controla cuándo se intenta enviar; la API todavía debe estar accesible para completar un envío.
+ConnectivityService comparte el estado real de red entre la interfaz y la cola de sincronización. Combina los eventos online/offline del navegador con Network de Capacitor. Al perder conexión, los cuidados quedan guardados localmente; al recuperarla, la cola se sincroniza automáticamente.
 
 ## Guardado y sincronización de cuidados
 
@@ -67,7 +61,7 @@ En **Mis mascotas**, pulsa **＋** para abrir el formulario. El nombre y la espe
 
 Las mascotas se guardan primero en el dispositivo (`localStorage`, clave `petcare.pets`). Se pueden registrar sin conexión con la aplicación abierta. Al abrir **Mis mascotas**, se recuperan también los perfiles del servidor. Los pendientes también se recuperan al iniciar la aplicación. Se sincronizan al recuperar la conexión y se reintentan cada 15 segundos si falla la API; las peticiones tienen un límite de 10 segundos. Cada mascota conserva su identificador para evitar duplicados al reintentar.
 
-La API guarda los perfiles en `data/pets.json`, ignorado por Git. Luna y Milo son perfiles de ejemplo: las mascotas nuevas muestran sus propios datos y no heredan las lecturas ni la ficha clínica de Luna. Reinicia `npm start` si la API ya estaba ejecutándose antes de añadir esta función.
+La API guarda los perfiles en data/pets.json, ignorado por Git. Los datos de mascotas se persisten en SQLite en el dispositivo y se sincronizan con la API cuando vuelve la conexión. Reinicia npm start si la API ya estaba ejecutándose antes de añadir esta función.
 
 ## API local
 
@@ -118,18 +112,31 @@ Para comprobar los reintentos, inicia aplicación y API por separado, detén sol
 
 La ruta `/location` incluye geolocalización mediante Capacitor, un mapa Leaflet con teselas de OpenStreetMap, búsqueda de ubicaciones mediante Nominatim, consulta de lugares cercanos mediante Overpass y una acción para compartir la ubicación con Capacitor Share. Su disponibilidad depende de los permisos y las capacidades del dispositivo; los recursos externos del mapa y las búsquedas requieren conexión.
 
-En `HomePage`, la búsqueda y conexión Bluetooth, la lectura NFC y la preparación del expediente para compartir son simulaciones de interfaz. Las alertas iniciales también son datos de demostración.
+### NFC y Bluetooth LE en Android
+
+La vista de conectividad utiliza `@capacitor-community/bluetooth-le` para escanear equipos BLE cercanos y conectarse a uno encontrado. La vista NFC utiliza `@capgo/capacitor-nfc` para leer etiquetas NDEF y escribir en ellas una ficha básica de mascota (nombre, especie y raza). Al leer una ficha PetCare, la app muestra sus datos y abre el perfil local cuando encuentra una coincidencia.
+
+`npm start` ejecuta la versión web y la API; el escaneo NFC requiere ejecutar la app nativa en un teléfono con NFC. Bluetooth en la web depende del navegador y sus permisos, así que para probar ambas funciones usa Android con Bluetooth activo y acerca una etiqueta NFC NDEF. El proyecto incluye la plataforma Android. Después de compilar los recursos web, sincroniza y ejecuta la app en un dispositivo o emulador configurado con Android Studio:
+
+~~~powershell
+npm run build
+npx cap sync android
+npx cap run android
+~~~
+
+Las lecturas del sensor y las alertas iniciales siguen siendo datos demostrativos; la conexión BLE implementada permite descubrir equipos y establecer la conexión GATT.
 
 ## Archivos principales
 
 | Archivo | Responsabilidad |
 | --- | --- |
 | `src/app/home/home.page.ts` | Interfaz de cuidados conectada a los servicios de red y sincronización. |
-| `src/app/home/home.page.html` | Vistas, formulario, controles de conexión y contador. |
+| src/app/home/home.page.html | Vistas, formularios, estado de red y contador. |
 | `src/app/home/home.page.scss` | Estilos de la pantalla principal. |
 | `src/app/location/location.page.ts` | Geolocalización, mapa y acción para compartir ubicación. |
 | `src/app/services/places.ts` | Consultas de ubicaciones y lugares cercanos. |
-| `src/app/services/connectivity.service.ts` | Estado compartido de red real y modo demostración. |
+| src/app/services/connectivity.service.ts | Estado real de conectividad del navegador y Capacitor. |
+| `src/app/services/device-link.service.ts` | Escaneo BLE, conexión GATT y lectura/escritura NFC. |
 | `src/app/services/care-record.service.ts` | Cola persistente, migración, timeout y reintentos de sincronización. |
 | `src/environments/environment.ts` | Endpoint de desarrollo para `CareRecordService`. |
 | `src/environments/environment.prod.ts` | Endpoint de producción para `CareRecordService`. |

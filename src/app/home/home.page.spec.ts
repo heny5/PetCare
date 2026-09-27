@@ -101,10 +101,10 @@ describe('HomePage care synchronization', () => {
     expect(JSON.parse(localStorage.getItem('petcare.pending-care-records')!)).toHaveLength(1);
   });
 
-  it('queues in demo offline mode and synchronizes when real network mode is selected', async () => {
+  it('queues a care record while the real connection is offline and sends it when connectivity returns', async () => {
     fetchMock.mockResolvedValue({ ok: true });
     await openHistory();
-    button('Offline').click();
+    TestBed.inject(ConnectivityService).updateNetworkStatus(false);
     await fixture.whenStable();
     await fillCare();
     button('GUARDAR CUIDADO').click();
@@ -114,24 +114,24 @@ describe('HomePage care synchronization', () => {
     expect(fixture.nativeElement.querySelectorAll('.pending-icon')).toHaveLength(1);
     expect(button('GUARDAR CUIDADO').disabled).toBe(false);
 
-    button('Red real').click();
+    TestBed.inject(ConnectivityService).updateNetworkStatus(true);
     await fixture.whenStable();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fixture.nativeElement.querySelectorAll('.pending-icon')).toHaveLength(0);
     expect(button('SINCRONIZAR AHORA').disabled).toBe(false);
   });
 
-  it('recovers an old pending care record and sends it when demo online is selected', async () => {
+  it('recovers an old pending care record and sends it when real connectivity returns', async () => {
     localStorage.setItem('petcare-pendientes', JSON.stringify([
       { id: 'PET-old', tipo: 'Cuidado de Milo', detalle: 'Comida', fecha: '2026-09-24T10:00:00.000Z' },
     ]));
-    TestBed.inject(ConnectivityService).setDemoOnline(false);
     fetchMock.mockResolvedValue({ ok: true });
     await openHistory();
+    TestBed.inject(ConnectivityService).updateNetworkStatus(false);
 
     expect(fixture.nativeElement.textContent).toContain('Cuidado de Milo');
     expect(fetchMock).not.toHaveBeenCalled();
-    button('En línea').click();
+    TestBed.inject(ConnectivityService).updateNetworkStatus(true);
     await fixture.whenStable();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);

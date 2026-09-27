@@ -25,7 +25,7 @@ describe('CareRecordService', () => {
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     connectivity = TestBed.inject(ConnectivityService);
-    connectivity.setDemoOnline(false);
+    connectivity.updateNetworkStatus(false);
   });
 
   afterEach(() => {
@@ -44,8 +44,6 @@ describe('CareRecordService', () => {
   }
 
   it('syncs pending records on the real browser online event', async () => {
-    connectivity.useRealNetwork();
-    connectivity.updateNetworkStatus(false);
     localStorage.setItem(queueKey, JSON.stringify([pendingRecord('online-event')]));
     const service = createService();
     fetchMock.mockResolvedValue({ ok: true });
@@ -59,20 +57,16 @@ describe('CareRecordService', () => {
     expect(service.pendingCount()).toBe(0);
   });
 
-  it('keeps demo offline records queued even when the real network comes back', async () => {
+  it('sends a queued record when the real network returns', async () => {
+    fetchMock.mockResolvedValue({ ok: true });
     const service = createService();
     await service.save({ petName: 'Luna', description: 'Paseo' });
+    expect(fetchMock).not.toHaveBeenCalled();
+
     window.dispatchEvent(new Event('online'));
     TestBed.tick();
-    await vi.advanceTimersByTimeAsync(30_000);
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(service.pendingCount()).toBe(1);
-
-    fetchMock.mockResolvedValue({ ok: true });
-    connectivity.useRealNetwork();
-    TestBed.tick();
     await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(service.pendingCount()).toBe(0);
   });
 
@@ -81,7 +75,7 @@ describe('CareRecordService', () => {
     const service = createService();
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce({ ok: true });
 
-    connectivity.setDemoOnline(true);
+    connectivity.updateNetworkStatus(true);
     TestBed.tick();
     await vi.advanceTimersByTimeAsync(0);
     expect(service.pendingCount()).toBe(1);
@@ -96,7 +90,7 @@ describe('CareRecordService', () => {
 
   it('persists online saves before sending and serializes overlapping saves', async () => {
     const service = createService();
-    connectivity.setDemoOnline(true);
+    connectivity.updateNetworkStatus(true);
     let resolveFirst!: (value: { ok: boolean }) => void;
     fetchMock.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
       .mockResolvedValue({ ok: true });
@@ -119,7 +113,7 @@ describe('CareRecordService', () => {
 
   it('unlocks synchronization after the 10 second request timeout', async () => {
     const service = createService();
-    connectivity.setDemoOnline(true);
+    connectivity.updateNetworkStatus(true);
     fetchMock.mockImplementation((_url, options) => new Promise((_resolve, reject) => {
       options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
     }));
@@ -138,7 +132,7 @@ describe('CareRecordService', () => {
     localStorage.setItem(queueKey, JSON.stringify([pendingRecord('one'), pendingRecord('two')]));
     const service = createService();
     fetchMock.mockResolvedValue({ ok: false, status: 500 });
-    connectivity.setDemoOnline(true);
+    connectivity.updateNetworkStatus(true);
     await service.syncPending();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
