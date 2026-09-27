@@ -14,12 +14,39 @@
       </button>
 
       <button
+        id="user-menu-trigger"
         class="avatar"
         type="button"
-        aria-label="Perfil">
-        CM
+        aria-label="Abrir menú de usuario">
+        <ion-icon name="person-circle-outline" aria-hidden="true"></ion-icon>
       </button>
     </header>
+
+    <ion-popover
+  #userPopover
+  trigger="user-menu-trigger"
+  triggerAction="click"
+  side="bottom"
+  alignment="end"
+  class="user-popover"
+>
+  <ng-template>
+    <section class="user-menu-content">
+      <p>
+        Usuario:
+        <b>{{ auth.currentUser() }}</b>
+      </p>
+
+      <button
+        class="logout-button"
+        type="button"
+        (click)="cerrarSesion(userPopover)"
+      >
+        Cerrar sesión
+      </button>
+    </section>
+  </ng-template>
+</ion-popover>
 
     <aside
       class="network-banner"
