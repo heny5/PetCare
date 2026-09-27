@@ -38,7 +38,7 @@ export class AuthPage {
           this.phone.set('');
         }
       } else if (await this.auth.login(this.username(), this.password())) {
-        await this.router.navigateByUrl('/home', { replaceUrl: true });
+        await this.router.navigateByUrl('/tabs/home', { replaceUrl: true });
       } else {
         this.error.set('Usuario o contraseña incorrectos');
       }

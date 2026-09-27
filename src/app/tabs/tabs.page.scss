@@ -1,0 +1,36 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.tabs-shell {
+  width: min(100%, 520px);
+  height: 100dvh;
+  min-height: 100%;
+  margin: 0 auto;
+  background: #fbfdfc;
+  box-shadow: 0 0 45px rgba(26, 67, 58, .09);
+}
+
+ion-tabs {
+  height: 100%;
+}
+
+ion-tab-bar {
+  --background: rgba(255, 255, 255, .98);
+  --border: 1px solid #dce8e4;
+  --color: #80908b;
+  --color-selected: #15866f;
+  min-height: 66px;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -9px 25px rgba(25, 58, 50, .06);
+}
+
+ion-tab-button {
+  font-size: 11px;
+  font-weight: 750;
+}
+
+ion-tab-button ion-icon {
+  font-size: 21px;
+}

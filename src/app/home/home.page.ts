@@ -2,8 +2,10 @@ import { CommonModule } from '@angular/common';
 import {
   Component,
   ChangeDetectorRef,
+  OnChanges,
   OnDestroy,
   OnInit,
+  Input,
   computed,
   effect,
   inject,
@@ -20,7 +22,14 @@ import type {
 } from '@capacitor/core';
 
 import { Camera, CameraErrorCode, EncodingType, MediaTypeSelection } from '@capacitor/camera';
-import { IonContent, IonIcon, IonPopover } from '@ionic/angular';
+import {
+  IonContent,
+  IonIcon,
+  IonPopover,
+  IonRefresher,
+  IonRefresherContent,
+  RefresherCustomEvent,
+} from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import { personCircleOutline } from 'ionicons/icons';
 
@@ -64,10 +73,14 @@ interface AlertaCollar {
     IonContent,
     IonIcon,
     IonPopover,
+    IonRefresher,
+    IonRefresherContent,
     RouterLink
   ],
 })
-export class HomePage implements OnInit, OnDestroy {
+export class HomePage implements OnChanges, OnInit, OnDestroy {
+  @Input({ required: true }) initialView!: Vista;
+
   readonly auth = inject(AuthService);
   private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly router = inject(Router);
@@ -110,6 +123,12 @@ export class HomePage implements OnInit, OnDestroy {
   get modoDemostracion(): boolean { return this.connectivity.isDemoMode(); }
   get sincronizando(): boolean { return this.careRecords.isSynchronizing(); }
   get pendientes() { return this.registrosPendientes(); }
+  get registrosDelServidor() {
+    const nombre = this.nombreMascota.trim().toLocaleLowerCase();
+    return this.careRecords.serverRecords().filter((record) =>
+      record.petName.trim().toLocaleLowerCase() === nombre
+    );
+  }
   get ultimaSincronizacion(): string {
     const fecha = this.careRecords.lastSyncedAt();
     return fecha ? new Date(fecha).toLocaleTimeString('es-DO', {
@@ -219,6 +238,37 @@ export class HomePage implements OnInit, OnDestroy {
     this.vista = vista;
     this.mensaje = '';
     if (vista === 'mascotas') this.petStore.activate();
+    if (vista === 'historial') void this.careRecords.loadRecords();
+
+    const tabRoute: Partial<Record<Vista, string>> = {
+      inicio: '/tabs/home',
+      mascotas: '/tabs/pets',
+      nfc: '/tabs/nfc',
+      historial: '/tabs/history',
+    };
+    const destination = tabRoute[vista];
+    if (destination && this.router.url !== destination) {
+      void this.router.navigateByUrl(destination);
+    }
+  }
+
+  ngOnChanges(): void {
+    if (!this.initialView) return;
+    this.vista = this.initialView;
+    if (this.vista === 'mascotas') this.petStore.activate();
+    if (this.vista === 'historial') void this.careRecords.loadRecords();
+  }
+
+  async actualizarContenido(event: RefresherCustomEvent): Promise<void> {
+    try {
+      await Promise.allSettled([
+        this.petStore.sync(),
+        this.careRecords.syncPending(),
+        this.careRecords.loadRecords(),
+      ]);
+    } finally {
+      await event.detail.complete();
+    }
   }
 
   abrirFormularioMascota(): void {

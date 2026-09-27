@@ -1,4 +1,11 @@
 <ion-content [fullscreen]="true" class="petcare-content">
+  <ion-refresher slot="fixed" (ionRefresh)="actualizarContenido($event)">
+    <ion-refresher-content
+      pullingText="Desliza para actualizar"
+      refreshingText="Actualizando datos...">
+    </ion-refresher-content>
+  </ion-refresher>
+
   <main class="app-shell">
     <header class="topbar">
       <button
@@ -926,6 +933,29 @@
             </button>
           </section>
 
+          <section class="care-form" aria-live="polite">
+            <h2>Cuidados sincronizados</h2>
+
+            @if (careRecords.isLoadingRecords()) {
+              <p class="helper">Cargando historial desde el servidor…</p>
+            } @else if (careRecords.recordsLoadError()) {
+              <p class="helper">No se pudo cargar el historial del servidor.</p>
+              <button type="button" (click)="careRecords.loadRecords()">
+                VOLVER A INTENTAR
+              </button>
+            } @else if (registrosDelServidor.length === 0) {
+              <p class="helper">Todavía no hay cuidados sincronizados para {{ nombreMascota }}.</p>
+            } @else {
+              @for (registro of registrosDelServidor; track registro.id) {
+                <article>
+                  <small>{{ registro.createdAt | date: 'd MMM y, h:mm a' }}</small>
+                  <h3>{{ registro.petName }}</h3>
+                  <p>{{ registro.description }}</p>
+                </article>
+              }
+            }
+          </section>
+
           <div class="timeline">
             @if (pendientes.length > 0) {
               @for (
@@ -1212,47 +1242,6 @@
       }
     }
 
-    <nav
-      class="bottom-nav"
-      aria-label="Navegación principal">
-      <button
-        type="button"
-        [class.active]="vista === 'inicio'"
-        (click)="abrir('inicio')">
-        <span>⌂</span>
-        Inicio
-      </button>
 
-      <button
-        type="button"
-        [class.active]="
-          vista === 'mascotas' ||
-          vista === 'nueva-mascota' ||
-          vista === 'detalle'
-        "
-        (click)="abrir('mascotas')">
-        <span>🐾</span>
-        Mascotas
-      </button>
-
-      <button
-        type="button"
-        [class.active]="vista === 'nfc'"
-        (click)="abrir('nfc')">
-        <span>◉</span>
-        NFC
-      </button>
-
-      <button
-        type="button"
-        [class.active]="
-          vista === 'historial' ||
-          vista === 'alertas'
-        "
-        (click)="abrir('historial')">
-        <span>▤</span>
-        Historial
-      </button>
-    </nav>
   </main>
 </ion-content>

@@ -8,9 +8,33 @@ export const routes: Routes = [
     loadComponent: () => import('./auth/auth.page').then((m) => m.AuthPage),
   },
   {
-    path: 'home',
+    path: 'tabs',
     canActivate: [requireAuthentication],
-    loadComponent: () => import('./home/home.page').then((m) => m.HomePage),
+    loadComponent: () => import('./tabs/tabs.page').then((m) => m.TabsPage),
+    children: [
+      {
+        path: 'home',
+        loadComponent: () => import('./tabs/home-tab.page').then((m) => m.HomeTabPage),
+      },
+      {
+        path: 'pets',
+        loadComponent: () => import('./tabs/pets-tab.page').then((m) => m.PetsTabPage),
+      },
+      {
+        path: 'nfc',
+        loadComponent: () => import('./tabs/nfc-tab.page').then((m) => m.NfcTabPage),
+      },
+      {
+        path: 'history',
+        loadComponent: () => import('./tabs/history-tab.page').then((m) => m.HistoryTabPage),
+      },
+      { path: '', redirectTo: 'home', pathMatch: 'full' },
+    ],
+  },
+  {
+    path: 'home',
+    redirectTo: 'tabs/home',
+    pathMatch: 'full',
   },
   {
     path: '',

@@ -24,11 +24,15 @@ export class CareRecordService implements OnDestroy {
   private readonly queue = signal(this.readQueue());
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private syncTask: Promise<void> | undefined;
+  private loadTask: Promise<void> | undefined;
   private activeRequest: AbortController | undefined;
   private destroyed = false;
 
   readonly pendingRecords = this.queue.asReadonly();
   readonly pendingCount = computed(() => this.pendingRecords().length);
+  readonly serverRecords = signal<CareRecord[]>([]);
+  readonly isLoadingRecords = signal(false);
+  readonly recordsLoadError = signal(false);
   readonly isSynchronizing = signal(false);
   readonly syncError = signal(false);
   readonly migrationError = signal(false);
@@ -60,7 +64,32 @@ export class CareRecordService implements OnDestroy {
     // Keep the record even if the page closes while the request is in flight.
     this.writeQueue([...this.readQueue(), entry]);
     await this.syncPending();
-    return this.pendingRecords().some((item) => item.id === entry.id) ? 'queued' : 'sent';
+    const result = this.pendingRecords().some((item) => item.id === entry.id) ? 'queued' : 'sent';
+    if (result === 'sent') {
+      void this.loadRecords();
+    }
+    return result;
+  }
+
+  loadRecords(): Promise<void> {
+    if (this.loadTask) {
+      return this.loadTask;
+    }
+    if (this.destroyed) {
+      return Promise.resolve();
+    }
+    if (!this.connectivity.isOnline()) {
+      this.recordsLoadError.set(true);
+      return Promise.resolve();
+    }
+
+    this.isLoadingRecords.set(true);
+    this.recordsLoadError.set(false);
+    this.loadTask = this.fetchRecords().finally(() => {
+      this.loadTask = undefined;
+      this.isLoadingRecords.set(false);
+    });
+    return this.loadTask;
   }
 
   syncPending(): Promise<void> {
@@ -121,6 +150,34 @@ export class CareRecordService implements OnDestroy {
     } finally {
       window.clearTimeout(timeout);
       this.activeRequest = undefined;
+    }
+  }
+
+  private async fetchRecords(): Promise<void> {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+
+    try {
+      const response = await fetch(environment.apiUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`The server could not return care records (${response.status}).`);
+      }
+
+      const payload: unknown = await response.json();
+      if (!Array.isArray(payload) || !payload.every(isCareRecord)) {
+        throw new Error('The server returned an invalid care-record list.');
+      }
+      this.serverRecords.set(
+        [...payload].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      );
+    } catch {
+      this.recordsLoadError.set(true);
+    } finally {
+      window.clearTimeout(timeout);
     }
   }
 
@@ -203,4 +260,13 @@ export class CareRecordService implements OnDestroy {
       this.retryTimer = undefined;
     }
   }
+}
+
+function isCareRecord(value: unknown): value is CareRecord {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Partial<CareRecord>;
+  return typeof record.id === 'string' &&
+    typeof record.petName === 'string' &&
+    typeof record.description === 'string' &&
+    typeof record.createdAt === 'string';
 }

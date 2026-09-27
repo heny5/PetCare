@@ -10,5 +10,5 @@ export const requireAuthentication: CanActivateFn = (_route, state) => {
 
 export const redirectAuthenticatedUser: CanActivateFn = () => {
   const auth = inject(AuthService);
-  return auth.isAuthenticated() ? inject(Router).createUrlTree(['/home']) : true;
+  return auth.isAuthenticated() ? inject(Router).createUrlTree(['/tabs/home']) : true;
 };
