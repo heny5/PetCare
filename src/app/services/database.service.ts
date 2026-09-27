@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { PetDraft, StoredPet } from './pet.model';
+import { CarePlanDraft, CarePlanEntry } from './care-plan.model';
 
 export interface UserRecord {
   id: number;
@@ -52,6 +53,11 @@ export class DatabaseService {
     return user?.id ?? null;
   }
 
+  async getUserContact(username: string): Promise<{ username: string; phone: string } | null> {
+    const user = await this.findUser('username', username);
+    return user ? { username: user.username, phone: user.phone } : null;
+  }
+
   async listPets(userId: number): Promise<StoredPet[]> {
     const database = await this.getDatabase();
     const result = await database.query(
@@ -98,6 +104,70 @@ export class DatabaseService {
     const database = await this.getDatabase();
     const result = await database.run('DELETE FROM pets WHERE id = ? AND user_id = ?', [Number(id), userId]);
     if (result.changes?.changes !== 1) throw new Error('La mascota no existe para este usuario.');
+    await this.saveWebDatabase();
+  }
+
+  async listCarePlans(userId: number): Promise<CarePlanEntry[]> {
+    const database = await this.getDatabase();
+    const result = await database.query(
+      `SELECT plan.id, plan.pet_id, pets.name AS pet_name, plan.type, plan.title,
+        plan.details, plan.due_at, plan.weight_kg, plan.temperature_c,
+        plan.completed_at, plan.created_at
+       FROM care_plans AS plan
+       INNER JOIN pets ON pets.id = plan.pet_id AND pets.user_id = plan.user_id
+       WHERE plan.user_id = ?
+       ORDER BY CASE WHEN plan.completed_at IS NULL THEN 0 ELSE 1 END, plan.due_at ASC`,
+      [userId],
+    );
+    return (result.values ?? []).map((row) => ({
+      id: String(row['id']),
+      petId: String(row['pet_id']),
+      petName: String(row['pet_name']),
+      type: row['type'] as CarePlanEntry['type'],
+      title: String(row['title']),
+      details: String(row['details'] ?? ''),
+      dueAt: String(row['due_at']),
+      weightKg: row['weight_kg'] === null ? null : Number(row['weight_kg']),
+      temperatureC: row['temperature_c'] === null ? null : Number(row['temperature_c']),
+      status: row['completed_at'] === null ? 'pending' : 'completed',
+        completedAt: row['completed_at'] === null ? null : String(row['completed_at']),
+      createdAt: String(row['created_at']),
+    }));
+  }
+
+  async addCarePlan(userId: number, draft: CarePlanDraft & { id: string }): Promise<void> {
+    const database = await this.getDatabase();
+    const pet = await database.query(
+      'SELECT id FROM pets WHERE id = ? AND user_id = ? LIMIT 1',
+      [Number(draft.petId), userId],
+    );
+    if (!pet.values?.length) throw new Error('La mascota seleccionada no pertenece a esta cuenta.');
+    const createdAt = new Date().toISOString();
+    const completedAt = draft.type === 'Control de salud' ? createdAt : null;
+    await database.run(
+      `INSERT INTO care_plans
+        (id, user_id, pet_id, type, title, details, due_at, weight_kg, temperature_c, completed_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [draft.id, userId, Number(draft.petId), draft.type, draft.title.trim(), draft.details.trim(), draft.dueAt,
+        draft.weightKg, draft.temperatureC, completedAt, createdAt],
+    );
+    await this.saveWebDatabase();
+  }
+
+  async setCarePlanCompleted(userId: number, id: string, completed: boolean): Promise<void> {
+    const database = await this.getDatabase();
+    const result = await database.run(
+      'UPDATE care_plans SET completed_at = ? WHERE id = ? AND user_id = ?',
+      [completed ? new Date().toISOString() : null, id, userId],
+    );
+    if (result.changes?.changes !== 1) throw new Error('El recordatorio ya no existe.');
+    await this.saveWebDatabase();
+  }
+
+  async deleteCarePlan(userId: number, id: string): Promise<void> {
+    const database = await this.getDatabase();
+    const result = await database.run('DELETE FROM care_plans WHERE id = ? AND user_id = ?', [id, userId]);
+    if (result.changes?.changes !== 1) throw new Error('El registro ya no existe.');
     await this.saveWebDatabase();
   }
 
@@ -172,6 +242,22 @@ export class DatabaseService {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
       CREATE INDEX IF NOT EXISTS idx_pets_user_id ON pets(user_id);
+      CREATE TABLE IF NOT EXISTS care_plans (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        pet_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        details TEXT NOT NULL DEFAULT '',
+        due_at TEXT NOT NULL,
+        weight_kg REAL,
+        temperature_c REAL,
+        completed_at TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_care_plans_user_due ON care_plans(user_id, due_at);
     `);
   }
 

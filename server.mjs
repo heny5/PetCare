@@ -106,6 +106,10 @@ const server = createServer(async (request, response) => {
 
     if (request.method === 'POST' && url.pathname === '/api/care-records') {
       const record = JSON.parse(await readBody(request));
+      const activityTypes = new Set([
+        'Paseo', 'Alimentación', 'Medicamento', 'Vacuna', 'Desparasitación',
+        'Cita veterinaria', 'Higiene y cuidado', 'Otro',
+      ]);
       if (
         !record ||
         typeof record !== 'object' ||
@@ -116,7 +120,10 @@ const server = createServer(async (request, response) => {
         !record.id ||
         !record.petName ||
         !record.description ||
-        !record.createdAt
+        !record.createdAt ||
+        (record.category !== undefined && !activityTypes.has(record.category)) ||
+        (record.petId !== undefined && (typeof record.petId !== 'string' || !record.petId.trim())) ||
+        (record.owner !== undefined && (typeof record.owner !== 'string' || !record.owner.trim()))
       ) {
         sendJson(response, 400, { error: 'A complete care record is required.' });
         return;
