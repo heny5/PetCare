@@ -125,7 +125,7 @@ export class DatabaseService {
   private async openDatabase(): Promise<void> {
     if (Capacitor.getPlatform() === 'web') {
       const { defineCustomElements } = await import('jeep-sqlite/loader');
-      defineCustomElements(window);
+      await defineCustomElements(window);
       await customElements.whenDefined('jeep-sqlite');
       document.body.appendChild(document.createElement('jeep-sqlite'));
       await this.sqlite.initWebStore();
