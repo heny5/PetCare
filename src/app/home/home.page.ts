@@ -6,6 +6,9 @@ import {
   OnDestroy,
   OnInit,
   Input,
+  ElementRef,
+  QueryList,
+  ViewChildren,
   computed,
   effect,
   inject,
@@ -21,7 +24,7 @@ import type {
   PluginListenerHandle
 } from '@capacitor/core';
 
-import { Camera, CameraErrorCode, EncodingType, MediaTypeSelection } from '@capacitor/camera';
+import { Camera, CameraErrorCode, EncodingType, MediaType, MediaTypeSelection } from '@capacitor/camera';
 import { DeviceLinkService, type NfcReadResult } from '../services/device-link.service';
 import {
   IonContent,
@@ -36,9 +39,14 @@ import { personCircleOutline } from 'ionicons/icons';
 
 import { PetService } from '../services/pet.service';
 import { PET_SPECIES, PET_SEXES, PetDraft, StoredPet, isPetDraft } from '../services/pet.model';
-import { CareRecordService } from '../services/care-record.service';
+import { CARE_ACTIVITY_TYPES, CareActivityType, CareRecordService } from '../services/care-record.service';
+import { CarePlanService } from '../services/care-plan.service';
+import { CARE_PLAN_TYPES, CarePlanDraft, CarePlanEntry, CarePlanType } from '../services/care-plan.model';
+import { DatabaseService } from '../services/database.service';
 import { ConnectivityService } from '../services/connectivity.service';
 import { AuthService } from '../services/auth.service';
+import { PetMediaService, PetVideoClip } from '../services/pet-media.service';
+import * as QRCode from 'qrcode';
 
 type Vista =
   | 'inicio'
@@ -48,6 +56,7 @@ type Vista =
   | 'conectar'
   | 'sensor'
   | 'nfc'
+  | 'cuidados'
   | 'historial'
   | 'alertas'
   | 'compartir';
@@ -62,6 +71,15 @@ interface AlertaCollar {
   detalle: string;
   hora: string;
   revisada: boolean;
+}
+
+interface HistorialEvent {
+  id: string;
+  category: string;
+  title: string;
+  details: string;
+  occurredAt: string;
+  pendingSync: boolean;
 }
 
 @Component({
@@ -91,6 +109,62 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   readonly nfcSharedPet = signal<{ id: string; name: string; species: string; breed: string } | null>(null);
   readonly nfcMatchedPet = signal<StoredPet | undefined>(undefined);
   readonly careRecords = inject(CareRecordService);
+  readonly carePlan = inject(CarePlanService);
+  readonly petMedia = inject(PetMediaService);
+  readonly videoAlbumOpen = signal(false);
+  readonly selectedVideoId = signal('');
+  readonly selectedVideo = computed(() =>
+    this.petMedia.clips().find((clip) => clip.id === this.selectedVideoId())
+  );
+  readonly activityTypes = CARE_ACTIVITY_TYPES;
+  readonly historialMascotaId = signal('');
+  readonly mascotaHistorialSeleccionada = computed(() =>
+    this.petStore.pets().find((pet) => pet.id === this.historialMascotaId())
+  );
+  readonly historialMascota = computed<HistorialEvent[]>(() => {
+    const pet = this.mascotaHistorialSeleccionada();
+    const owner = this.auth.currentUser()?.trim().toLocaleLowerCase();
+    if (!pet || !owner) return [];
+    const belongsToPet = (record: { petName: string; petId?: string; owner?: string }) => {
+      if (record.owner && record.owner.trim().toLocaleLowerCase() !== owner) return false;
+      if (record.petId) return record.petId === pet.id;
+      return record.petName.trim().toLocaleLowerCase() === pet.name.trim().toLocaleLowerCase();
+    };
+    const events = new Map<string, HistorialEvent>();
+    for (const record of this.careRecords.serverRecords()) {
+      if (!belongsToPet(record)) continue;
+      events.set(record.id, {
+        id: record.id, category: record.category ?? 'Otro', title: record.category ?? 'Atención',
+        details: record.description, occurredAt: record.createdAt, pendingSync: false,
+      });
+    }
+    for (const record of this.careRecords.pendingRecords()) {
+      if (!belongsToPet(record)) continue;
+      events.set(record.id, {
+        id: record.id, category: record.category ?? 'Otro', title: record.category ?? 'Atención',
+        details: record.description, occurredAt: record.createdAt, pendingSync: true,
+      });
+    }
+    for (const entry of this.carePlan.completedEntries()) {
+      if (entry.petId !== pet.id) continue;
+      const measurements = [
+        entry.weightKg === null ? '' : `Peso: ${entry.weightKg} kg`,
+        entry.temperatureC === null ? '' : `Temperatura: ${entry.temperatureC} °C`,
+      ].filter(Boolean);
+      events.set(`plan:${entry.id}`, {
+        id: `plan:${entry.id}`, category: entry.type, title: entry.title,
+        details: [entry.details, ...measurements].filter(Boolean).join(' · '),
+        occurredAt: entry.completedAt ?? entry.dueAt, pendingSync: false,
+      });
+    }
+    return [...events.values()].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt));
+  });
+  readonly historialPendientesCount = computed(() =>
+    this.historialMascota().filter((event) => event.pendingSync).length
+  );
+  readonly carePlanTypes = CARE_PLAN_TYPES;
+  private readonly database = inject(DatabaseService);
+  readonly nextCareItems = computed(() => this.carePlan.pendingEntries().slice(0, 2));
   readonly deviceLink = inject(DeviceLinkService);
   readonly petStore = inject(PetService);
   readonly totalPendientes = computed(() => this.careRecords.pendingCount() + this.petStore.pendingCount());
@@ -134,12 +208,6 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     const result = this.deviceLink.bluetoothDevices().find((item) => item.device.deviceId === id);
     return result?.device.name || result?.localName || 'Dispositivo BLE';
   }
-  get registrosDelServidor() {
-    const nombre = this.nombreMascota.trim().toLocaleLowerCase();
-    return this.careRecords.serverRecords().filter((record) =>
-      record.petName.trim().toLocaleLowerCase() === nombre
-    );
-  }
   get ultimaSincronizacion(): string {
     const fecha = this.careRecords.lastSyncedAt();
     return fecha ? new Date(fecha).toLocaleTimeString('es-DO', {
@@ -149,10 +217,29 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   mascotaPerdida = false;
   fechaAlertaPerdida = '';
-  hallazgoRegistrado = false;
+  readonly lostPetQr = signal('');
+  readonly lostQrLoading = signal(false);
+  readonly lostQrError = signal('');
+
+  carePlanPetId = '';
+  carePlanType: CarePlanType = 'Cita veterinaria';
+  carePlanTitle = '';
+  carePlanDetails = '';
+  carePlanDueAt = this.fechaLocalInput(24 * 60 * 60 * 1000);
+  carePlanWeight: number | null = null;
+  carePlanTemperature: number | null = null;
+  readonly carePlanMessage = signal('');
+  readonly savingCarePlan = signal(false);
 
   nombreMascota = '';
   cuidadoRealizado = '';
+  historyCategory: CareActivityType = 'Otro';
+  videoCaption = '';
+  readonly videoMessage = signal('');
+  readonly savingVideo = signal(false);
+  readonly playingVideoId = signal('');
+  readonly videoPositions = signal<Record<string, number>>({});
+  @ViewChildren('petVideoPlayer') private petVideoPlayers?: QueryList<ElementRef<HTMLVideoElement>>;
 
   alertas: AlertaCollar[] = [
     {
@@ -191,6 +278,18 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   constructor() {
     addIcons({ personCircleOutline });
     effect(() => {
+      const pets = this.petStore.pets();
+      if (pets.length && !pets.some((pet) => pet.id === this.carePlanPetId)) {
+        this.carePlanPetId = this.mascotaSeleccionada()?.id ?? pets[0].id;
+      }
+    });
+    effect(() => {
+      const pets = this.petStore.pets();
+      if (this.vista === 'historial' && pets.length && !pets.some((pet) => pet.id === this.historialMascotaId())) {
+        this.prepararMascotaHistorial();
+      }
+    });
+    effect(() => {
       const synchronizing = this.careRecords.isSynchronizing();
       const pending = this.careRecords.pendingCount();
       const error = this.careRecords.syncError();
@@ -212,7 +311,17 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     this.cargarEstadoLocal();
-    if (this.initialView === 'inicio') this.petStore.activate();
+    if (this.initialView === 'inicio' || this.initialView === 'cuidados' || this.initialView === 'historial') this.petStore.activate();
+    if (this.initialView === 'inicio') void this.carePlan.activate();
+    if (this.initialView === 'cuidados') {
+      void this.carePlan.activate();
+      this.prepararFormularioCuidados();
+    }
+    if (this.initialView === 'historial') {
+      void this.carePlan.activate();
+      this.prepararMascotaHistorial();
+      void this.careRecords.loadRecords();
+    }
     try {
       const estado = await Network.getStatus();
       if (this.destroyed) return;
@@ -248,11 +357,23 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.vista = vista;
     this.mensaje = '';
     if (vista === 'mascotas' || vista === 'nfc') this.petStore.activate();
-    if (vista === 'historial') void this.careRecords.loadRecords();
+    if (vista === 'cuidados') {
+      this.petStore.activate();
+      void this.carePlan.activate();
+      this.prepararFormularioCuidados();
+    }
+    if (vista === 'inicio') void this.carePlan.activate();
+    if (vista === 'historial') {
+      this.petStore.activate();
+      void this.carePlan.activate();
+      this.prepararMascotaHistorial();
+      void this.careRecords.loadRecords();
+    }
 
     const tabRoute: Partial<Record<Vista, string>> = {
       inicio: '/tabs/home',
       mascotas: '/tabs/pets',
+      cuidados: '/tabs/care',
       nfc: '/tabs/nfc',
       historial: '/tabs/history',
     };
@@ -271,7 +392,18 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.vista = vista;
     this.mascotaPorEliminar = null;
     if (vista === 'mascotas' || vista === 'nfc') this.petStore.activate();
-    if (vista === 'historial') void this.careRecords.loadRecords();
+    if (vista === 'inicio') void this.carePlan.activate();
+    if (vista === 'cuidados') {
+      this.petStore.activate();
+      void this.carePlan.activate();
+      this.prepararFormularioCuidados();
+    }
+    if (vista === 'historial') {
+      this.petStore.activate();
+      void this.carePlan.activate();
+      this.prepararMascotaHistorial();
+      void this.careRecords.loadRecords();
+    }
   }
 
   async actualizarContenido(event: RefresherCustomEvent): Promise<void> {
@@ -280,6 +412,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
         this.petStore.sync(),
         this.careRecords.syncPending(),
         this.careRecords.loadRecords(),
+        this.carePlan.reload(),
       ]);
     } finally {
       await event.detail.complete();
@@ -320,6 +453,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.errorFoto.set('');
     this.opcionesFotoAbiertas.set(false);
     this.nombreMascota = pet.name;
+    this.cargarEstadoMascotaPerdida(pet);
     this.abrir('detalle');
   }
 
@@ -419,7 +553,8 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     const pet = this.mascotaSeleccionada();
     if (!pet) { this.abrir('mascotas'); return; }
     this.nombreMascota = pet.name;
-    this.abrir('historial');
+    this.carePlanPetId = pet.id;
+    this.abrir('cuidados');
   }
 
   iconoMascota(species: string): string {
@@ -548,27 +683,342 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       'Expediente preparado para compartir de forma segura.';
   }
 
-  async registrarControl(): Promise<void> {
+  async registrarAtencionRealizada(): Promise<void> {
     if (this.guardando()) return;
-    const petName = this.nombreMascota.trim();
+    const pet = this.mascotaHistorialSeleccionada();
+    const petName = pet?.name.trim() ?? '';
+    const owner = this.auth.currentUser()?.trim() ?? '';
     const originalDescription = this.cuidadoRealizado;
     const description = originalDescription.trim();
-    if (!petName || !description) {
-      this.mensaje = 'Completa el nombre de la mascota y el cuidado realizado.';
+    if (!pet || !owner || !description) {
+      this.mensaje = 'Selecciona una mascota y describe la atención que ya ocurrió.';
       return;
     }
 
     this.guardando.set(true);
     try {
-      await this.careRecords.save({ petName, description });
+      await this.careRecords.save({
+        petName,
+        petId: pet.id,
+        owner,
+        category: this.historyCategory,
+        description,
+      });
       if (this.cuidadoRealizado === originalDescription) {
         this.cuidadoRealizado = '';
       }
+      void this.careRecords.loadRecords();
     } catch {
-      this.mensaje = 'No se pudo guardar el cuidado en este dispositivo. Conserva el texto e inténtalo de nuevo.';
+      this.mensaje = 'No se pudo guardar la atención en este dispositivo. Conserva el texto e inténtalo de nuevo.';
     } finally {
       this.guardando.set(false);
     }
+  }
+
+  async agregarVideoHistorial(): Promise<void> {
+    if (this.savingVideo()) return;
+    const pet = this.mascotaHistorialSeleccionada();
+    const owner = this.auth.currentUser()?.trim() ?? '';
+    if (!pet || !owner) {
+      this.videoMessage.set('Selecciona una mascota antes de agregar un video.');
+      return;
+    }
+
+    this.videoMessage.set('');
+    this.savingVideo.set(true);
+    try {
+      const { results } = await Camera.chooseFromGallery({
+        mediaType: MediaTypeSelection.Video,
+        includeMetadata: true,
+      });
+      const selectedVideo = results.find((item) => item.type === MediaType.Video);
+      if (!selectedVideo) return;
+      if (selectedVideo.metadata?.size && selectedVideo.metadata.size > PetMediaService.maxSizeBytes) {
+        throw new Error('El video debe pesar menos de 35 MB.');
+      }
+      if (selectedVideo.metadata?.duration && selectedVideo.metadata.duration > PetMediaService.maxDurationSeconds) {
+        throw new Error('El video debe durar 60 segundos o menos.');
+      }
+      if (!selectedVideo.webPath) throw new Error('No se pudo acceder al archivo seleccionado.');
+
+      const response = await fetch(selectedVideo.webPath);
+      if (!response.ok) throw new Error('No se pudo leer el video de la galería.');
+      const length = Number(response.headers.get('content-length'));
+      if (length > PetMediaService.maxSizeBytes) throw new Error('El video debe pesar menos de 35 MB.');
+      const blob = await response.blob();
+      const duration = selectedVideo.metadata?.duration || await this.duracionVideo(blob);
+      if (this.auth.currentUser()?.trim() !== owner || this.mascotaHistorialSeleccionada()?.id !== pet.id) {
+        throw new Error('Cambió la mascota o la sesión. Selecciónala de nuevo e inténtalo.');
+      }
+      await this.petMedia.addVideo({
+        owner,
+        petId: pet.id,
+        petName: pet.name,
+        caption: this.videoCaption,
+        blob,
+        durationSeconds: duration,
+        poster: selectedVideo.thumbnail ? `data:image/jpeg;base64,${selectedVideo.thumbnail}` : '',
+      });
+      this.videoCaption = '';
+      this.videoMessage.set(`Video agregado al historial de ${pet.name}. Se guarda en este dispositivo.`);
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+      if (code === CameraErrorCode.ChooseMediaCancelled || (error instanceof Error && /cancel|canceled|cancelled/i.test(error.message))) return;
+      this.videoMessage.set(error instanceof Error ? error.message : 'No se pudo agregar el video. Inténtalo de nuevo.');
+    } finally {
+      this.savingVideo.set(false);
+    }
+  }
+
+  async eliminarVideoHistorial(clip: PetVideoClip): Promise<void> {
+    if (!window.confirm(`¿Eliminar este video del historial de ${clip.petName}?`)) return;
+    try {
+      await this.petMedia.deleteVideo(clip.id);
+      this.videoMessage.set('Video eliminado del historial.');
+    } catch {
+      this.videoMessage.set('No se pudo eliminar el video. Inténtalo de nuevo.');
+    }
+  }
+
+  abrirReproductorVideo(clip: PetVideoClip): void {
+    this.selectedVideoId.set(clip.id);
+    this.videoPositions.update((positions) => ({ ...positions, [clip.id]: 0 }));
+  }
+
+  abrirAlbumVideos(): void {
+    this.selectedVideoId.set('');
+    this.videoAlbumOpen.set(true);
+  }
+
+  volverAlbumVideos(player: HTMLVideoElement): void {
+    player.pause();
+    this.playingVideoId.set('');
+    this.selectedVideoId.set('');
+  }
+
+  cerrarAlbumVideos(): void {
+    this.petVideoPlayers?.forEach((reference) => reference.nativeElement.pause());
+    this.playingVideoId.set('');
+    this.selectedVideoId.set('');
+    this.videoAlbumOpen.set(false);
+  }
+
+  async alternarReproduccionVideo(id: string, player: HTMLVideoElement): Promise<void> {
+    if (!player.paused && this.playingVideoId() === id) {
+      player.pause();
+      this.playingVideoId.set('');
+      return;
+    }
+    this.petVideoPlayers?.forEach((reference) => {
+      if (reference.nativeElement !== player) reference.nativeElement.pause();
+    });
+    this.playingVideoId.set(id);
+    try {
+      await player.play();
+    } catch {
+      this.playingVideoId.set('');
+      this.videoMessage.set('El dispositivo no pudo reproducir este formato de video.');
+    }
+  }
+
+  actualizarPosicionVideo(id: string, player: HTMLVideoElement): void {
+    this.videoPositions.update((positions) => ({ ...positions, [id]: player.currentTime }));
+    if (player.paused) this.videoPausado(id);
+  }
+
+  videoPausado(id: string): void {
+    if (this.playingVideoId() === id) this.playingVideoId.set('');
+  }
+
+  buscarVideo(player: HTMLVideoElement, event: Event): void {
+    const value = Number((event.target as HTMLInputElement).value);
+    if (Number.isFinite(value)) player.currentTime = value;
+  }
+
+  ajustarVolumenVideo(player: HTMLVideoElement, event: Event): void {
+    player.volume = Number((event.target as HTMLInputElement).value);
+    player.muted = false;
+  }
+
+  alternarSilencioVideo(player: HTMLVideoElement): void {
+    player.muted = !player.muted;
+  }
+
+  cambiarVelocidadVideo(player: HTMLVideoElement): void {
+    const speeds = [1, 1.25, 1.5, 2];
+    const index = speeds.indexOf(player.playbackRate);
+    player.playbackRate = speeds[(index + 1) % speeds.length];
+  }
+
+  expandirVideo(player: HTMLVideoElement): void {
+    const surface = player.parentElement;
+    if (!surface) return;
+    if (document.fullscreenElement === surface) {
+      void document.exitFullscreen();
+    } else if (surface.requestFullscreen) {
+      void surface.requestFullscreen().catch(() => this.videoMessage.set('La pantalla completa no está disponible en este dispositivo.'));
+    }
+  }
+
+  formatearTiempoVideo(seconds: number): string {
+    if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+    const wholeSeconds = Math.floor(seconds);
+    return `${Math.floor(wholeSeconds / 60)}:${String(wholeSeconds % 60).padStart(2, '0')}`;
+  }
+
+  posicionVideo(id: string): number {
+    return this.videoPositions()[id] || 0;
+  }
+
+  private async duracionVideo(blob: Blob): Promise<number> {
+    const url = URL.createObjectURL(blob);
+    try {
+      return await new Promise<number>((resolve, reject) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.onloadedmetadata = () => resolve(video.duration);
+        video.onerror = () => reject(new Error('No se pudo leer la duración del video.'));
+        video.src = url;
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async guardarPlanCuidado(): Promise<void> {
+    if (this.savingCarePlan()) return;
+    this.carePlanMessage.set('');
+    const selectedPet = this.petStore.pets().find((pet) => pet.id === this.carePlanPetId);
+    if (!selectedPet) {
+      this.carePlanMessage.set('Registra o selecciona una mascota para continuar.');
+      return;
+    }
+
+    const title = this.carePlanTitle.trim() || (this.carePlanType === 'Control de salud' ? 'Control de salud' : '');
+    const weightKg = typeof this.carePlanWeight === 'number' ? this.carePlanWeight : null;
+    const temperatureC = typeof this.carePlanTemperature === 'number' ? this.carePlanTemperature : null;
+    const dueAt = new Date(this.carePlanDueAt);
+    if (!Number.isFinite(dueAt.getTime())) {
+      this.carePlanMessage.set('Indica una fecha válida para este cuidado.');
+      return;
+    }
+    const draft: CarePlanDraft = {
+      petId: selectedPet.id,
+      type: this.carePlanType,
+      title,
+      details: this.carePlanDetails,
+      dueAt: dueAt.toISOString(),
+      weightKg,
+      temperatureC,
+    };
+
+    this.savingCarePlan.set(true);
+    try {
+      await this.carePlan.add(draft);
+      this.carePlanTitle = '';
+      this.carePlanDetails = '';
+      this.carePlanWeight = null;
+      this.carePlanTemperature = null;
+      this.carePlanDueAt = this.fechaLocalInput(this.carePlanType === 'Control de salud' ? 0 : 24 * 60 * 60 * 1000);
+      this.carePlanMessage.set(
+        this.carePlanType === 'Control de salud'
+          ? `Control de ${selectedPet.name} guardado en su historial.`
+          : `Recordatorio de ${selectedPet.name} guardado.`,
+      );
+    } catch (error) {
+      this.carePlanMessage.set(error instanceof Error ? error.message : 'No se pudo guardar este cuidado. Inténtalo de nuevo.');
+    } finally {
+      this.savingCarePlan.set(false);
+    }
+  }
+
+  async completarPlanCuidado(entry: CarePlanEntry): Promise<void> {
+    try {
+      await this.carePlan.setCompleted(entry.id, entry.status !== 'completed');
+      this.carePlanMessage.set(entry.status === 'completed' ? 'Recordatorio reactivado.' : 'Cuidado marcado como realizado.');
+    } catch (error) {
+      this.carePlanMessage.set(error instanceof Error ? error.message : 'No se pudo actualizar este recordatorio.');
+    }
+  }
+
+  async eliminarPlanCuidado(entry: CarePlanEntry): Promise<void> {
+    if (!window.confirm(`¿Eliminar “${entry.title}” de ${entry.petName}?`)) return;
+    try {
+      await this.carePlan.remove(entry.id);
+      this.carePlanMessage.set('Registro eliminado.');
+    } catch (error) {
+      this.carePlanMessage.set(error instanceof Error ? error.message : 'No se pudo eliminar este registro.');
+    }
+  }
+
+  actualizarTipoCuidado(type: CarePlanType): void {
+    this.carePlanType = type;
+    this.carePlanTitle = type === 'Control de salud' ? 'Control de salud' : '';
+    if (type === 'Control de salud') this.carePlanDueAt = this.fechaLocalInput(0);
+  }
+
+  recordatorioLabel(entry: CarePlanEntry): string {
+    if (entry.status === 'completed') return 'Realizado';
+    const days = Math.floor((this.inicioDelDia(Date.parse(entry.dueAt)) - this.inicioDelDia(Date.now())) / 86_400_000);
+    if (days < 0) return 'Vencido';
+    if (days === 0) return 'Hoy';
+    if (days === 1) return 'Mañana';
+    if (days <= 3) return `En ${days} días`;
+    return new Intl.DateTimeFormat('es-DO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(entry.dueAt));
+  }
+
+  ultimoControl(petId: string): CarePlanEntry | undefined {
+    return this.carePlan.latestMeasurement(petId);
+  }
+
+  planesPendientesMascota(petId: string): CarePlanEntry[] {
+    return this.carePlan.pendingEntries().filter((entry) => entry.petId === petId).slice(0, 3);
+  }
+
+  private inicioDelDia(timestamp: number): number {
+    const date = new Date(timestamp);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  }
+
+  private fechaLocalInput(offsetMs: number): string {
+    const date = new Date(Date.now() + offsetMs);
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().slice(0, 16);
+  }
+
+  private prepararFormularioCuidados(): void {
+    const pets = this.petStore.pets();
+    if (!pets.some((pet) => pet.id === this.carePlanPetId)) {
+      this.carePlanPetId = this.mascotaSeleccionada()?.id ?? pets[0]?.id ?? '';
+    }
+  }
+
+  private prepararMascotaHistorial(): void {
+    const pets = this.petStore.pets();
+    if (pets.some((pet) => pet.id === this.historialMascotaId())) {
+      this.nombreMascota = this.mascotaHistorialSeleccionada()?.name ?? this.nombreMascota;
+      this.cargarVideosHistorial(this.historialMascotaId());
+      return;
+    }
+    const selected = this.mascotaSeleccionada() ?? pets[0];
+    this.historialMascotaId.set(selected?.id ?? '');
+    this.nombreMascota = selected?.name ?? '';
+    if (selected) this.cargarVideosHistorial(selected.id);
+  }
+
+  seleccionarMascotaHistorial(petId: string): void {
+    this.historialMascotaId.set(petId);
+    this.nombreMascota = this.petStore.pets().find((pet) => pet.id === petId)?.name ?? '';
+    this.videoMessage.set('');
+    this.cargarVideosHistorial(petId);
+  }
+
+  private cargarVideosHistorial(petId: string): void {
+    const owner = this.auth.currentUser()?.trim() ?? '';
+    void this.petMedia.loadForPet(owner, petId).catch(() => {
+      this.videoMessage.set('No se pudieron cargar los videos guardados en este dispositivo.');
+    });
   }
 
   async sincronizarPendientes(): Promise<void> {
@@ -587,38 +1037,83 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.connectivity.updateNetworkStatus(status.connected);
   }
 
-  alternarMascotaPerdida(): void {
-    this.mascotaPerdida =
-      !this.mascotaPerdida;
+  async alternarMascotaPerdida(): Promise<void> {
+    const pet = this.mascotaSeleccionada();
+    const username = this.auth.currentUser()?.trim();
+    if (!pet || !username) return;
 
-    this.hallazgoRegistrado = false;
-
-    this.fechaAlertaPerdida =
-      this.mascotaPerdida
-        ? new Date().toLocaleString(
-            'es-DO',
-            {
-              dateStyle: 'medium',
-              timeStyle: 'short'
-            }
-          )
-        : '';
-
-    this.mensaje =
-      this.mascotaPerdida
-        ? 'Alerta activada. La lectura NFC mostrará la ficha de mascota perdida.'
-        : `${this.nombreMascota || 'La mascota'} fue marcada como encontrada. La alerta quedó desactivada.`;
-
-    this.guardarEstadoLocal();
+    const nextState = !this.mascotaPerdida;
+    this.mascotaPerdida = nextState;
+    this.lostQrError.set('');
+    this.lostPetQr.set('');
+    const key = this.claveMascotaPerdida(username, pet.id);
+    const states = this.leerMascotasPerdidas();
+    if (nextState) {
+      this.fechaAlertaPerdida = new Date().toLocaleString('es-DO', { dateStyle: 'medium', timeStyle: 'short' });
+      states[key] = { active: true, reportedAt: this.fechaAlertaPerdida };
+      localStorage.setItem('petcare.lost-pets', JSON.stringify(states));
+      await this.generarQrMascotaPerdida(pet);
+      this.mensaje = this.lostQrError() ? 'La alerta está activa, pero no se pudo generar el QR.' : 'Alerta activada y QR de contacto listo.';
+    } else {
+      this.fechaAlertaPerdida = '';
+      delete states[key];
+      localStorage.setItem('petcare.lost-pets', JSON.stringify(states));
+      this.mensaje = `${pet.name} fue marcada como encontrada. La alerta quedó desactivada.`;
+    }
   }
 
-  registrarHallazgo(): void {
-    this.hallazgoRegistrado = true;
+  private cargarEstadoMascotaPerdida(pet: StoredPet): void {
+    const username = this.auth.currentUser()?.trim();
+    const state = username ? this.leerMascotasPerdidas()[this.claveMascotaPerdida(username, pet.id)] : undefined;
+    this.mascotaPerdida = state?.active ?? false;
+    this.fechaAlertaPerdida = state?.reportedAt ?? '';
+    this.lostPetQr.set('');
+    this.lostQrError.set('');
+    if (this.mascotaPerdida) void this.generarQrMascotaPerdida(pet);
+  }
 
-    this.mensaje =
-      'Hallazgo registrado en Santiago, República Dominicana.';
+  private claveMascotaPerdida(username: string, petId: string): string {
+    return `${encodeURIComponent(username)}:${petId}`;
+  }
 
-    this.guardarEstadoLocal();
+  private leerMascotasPerdidas(): Record<string, { active: boolean; reportedAt: string }> {
+    try {
+      const value: unknown = JSON.parse(localStorage.getItem('petcare.lost-pets') ?? '{}');
+      return value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, { active: boolean; reportedAt: string }>
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private async generarQrMascotaPerdida(pet: StoredPet): Promise<void> {
+    this.lostQrLoading.set(true);
+    this.lostQrError.set('');
+    try {
+      const username = this.auth.currentUser()?.trim();
+      const contact = username ? await this.database.getUserContact(username) : null;
+      if (!contact?.phone) throw new Error('La cuenta no tiene un teléfono de contacto disponible.');
+      const details = [
+        'PETCARE — MASCOTA PERDIDA',
+        `Nombre: ${pet.name}`,
+        `Especie: ${pet.species}`,
+        pet.breed ? `Raza: ${pet.breed}` : '',
+        `Contacto: ${contact.phone}`,
+        'Si me encontraste, comunícate con mi familia.',
+      ].filter(Boolean).join('\n');
+      const image = await QRCode.toDataURL(details, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 280,
+        color: { dark: '#123b31', light: '#ffffff' },
+      });
+      this.lostPetQr.set(image);
+    } catch (error) {
+      this.lostQrError.set(error instanceof Error ? error.message : 'No se pudo generar el QR.');
+    } finally {
+      this.lostQrLoading.set(false);
+    }
   }
 
   revisarAlerta(id: number): void {
@@ -685,24 +1180,9 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   private cargarEstadoLocal(): void {
     try {
-      this.mascotaPerdida =
-        JSON.parse(
-          localStorage.getItem(
-            'petcare-mascota-perdida'
-          ) ?? 'false'
-        );
-
-      this.fechaAlertaPerdida =
-        localStorage.getItem(
-          'petcare-fecha-perdida'
-        ) ?? '';
-
-      this.hallazgoRegistrado =
-        JSON.parse(
-          localStorage.getItem(
-            'petcare-hallazgo'
-          ) ?? 'false'
-        );
+      localStorage.removeItem('petcare-mascota-perdida');
+      localStorage.removeItem('petcare-fecha-perdida');
+      localStorage.removeItem('petcare-hallazgo');
 
       const alertasGuardadas =
         localStorage.getItem(
@@ -720,25 +1200,6 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   }
 
   private guardarEstadoLocal(): void {
-    localStorage.setItem(
-      'petcare-mascota-perdida',
-      JSON.stringify(
-        this.mascotaPerdida
-      )
-    );
-
-    localStorage.setItem(
-      'petcare-fecha-perdida',
-      this.fechaAlertaPerdida
-    );
-
-    localStorage.setItem(
-      'petcare-hallazgo',
-      JSON.stringify(
-        this.hallazgoRegistrado
-      )
-    );
-
     localStorage.setItem(
       'petcare-alertas',
       JSON.stringify(this.alertas)

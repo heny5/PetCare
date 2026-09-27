@@ -117,7 +117,7 @@
 
           <div class="section-title">
             <h2>Accesos rápidos</h2>
-            <span>5 servicios</span>
+            <span>6 servicios</span>
           </div>
 
           <div class="quick-grid">
@@ -158,6 +158,15 @@
             </button>
 
             <button
+              class="quick-card amber"
+              type="button"
+              (click)="abrir('cuidados')">
+              <span aria-hidden="true">📅</span>
+              <b>Cuidados</b>
+              <small>Citas, vacunas y recordatorios</small>
+            </button>
+
+            <button
               class="quick-card mint"
               type="button"
               routerLink="/location">
@@ -166,6 +175,32 @@
               <small>GPS y lugares cercanos</small>
             </button>
           </div>
+
+          @if (petStore.pets().length > 0) {
+            <article class="care-reminder-card">
+              <div class="care-reminder-heading">
+                <div>
+                  <small>Plan de bienestar</small>
+                  <h2>Próximos cuidados</h2>
+                </div>
+                <span class="care-reminder-count">{{ carePlan.reminderCount() }}</span>
+              </div>
+              @if (nextCareItems().length > 0) {
+                <div class="care-reminder-list">
+                  @for (entry of nextCareItems(); track entry.id) {
+                    <button type="button" class="care-reminder-item" (click)="abrir('cuidados')">
+                      <span class="care-reminder-date">{{ recordatorioLabel(entry) }}</span>
+                      <span class="grow"><b>{{ entry.title }}</b><small>{{ entry.petName }} · {{ entry.type }}</small></span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                  }
+                </div>
+              } @else {
+                <p>Aún no hay citas ni cuidados programados.</p>
+              }
+              <button class="care-reminder-action" type="button" (click)="abrir('cuidados')">Abrir Cuidados</button>
+            </article>
+          }
 
           @if (mascotaSeleccionada(); as mascota) {
             <article class="pet-summary">
@@ -313,7 +348,6 @@
           @for (mascota of petStore.pets(); track mascota.id) {
             <article class="pet-list-item">
             <button type="button" class="pet-card pet-card-button"
-              [class.featured]="mascota.id === 'demo-luna'"
               [attr.aria-label]="'Ver ficha de ' + mascota.name" (click)="seleccionarMascota(mascota)">
               <span class="pet-photo large pet-card-photo" [class.cat]="mascota.species === 'Gato'" aria-hidden="true">
                 @if (fotosMascota()[mascota.id]; as foto) {
@@ -326,7 +360,7 @@
                 <span class="pet-name">{{ mascota.name }}</span>
                 <span class="pet-description">{{ mascota.breed || mascota.species }} · {{ mascota.sex }} · {{ edadMascota(mascota.ageYears) }}</span>
                 <span class="tag" [class.neutral]="mascota.pending">
-                  {{ mascota.id.startsWith('demo-') ? 'Perfil de ejemplo' : mascota.pending ? 'Pendiente de sincronización' : 'Mascota registrada' }}
+                  {{ mascota.pending ? 'Pendiente de sincronización' : 'Mascota registrada' }}
                 </span>
               </span>
               <span class="chevron" aria-hidden="true">›</span>
@@ -395,7 +429,7 @@
         @if (mascotaSeleccionada(); as mascota) {
         <section class="page">
           <button class="back" type="button" (click)="abrir('mascotas')">← Mis mascotas</button>
-          <div class="profile-cover" [class.lost-cover]="mascota.id === 'demo-luna' && mascotaPerdida">
+          <div class="profile-cover" [class.lost-cover]="mascotaPerdida">
             <div class="pet-photo xlarge profile-photo" [class.cat]="mascota.species === 'Gato'">
               @if (fotosMascota()[mascota.id]; as foto) {
                 <img [src]="foto" [alt]="'Foto de ' + mascota.name">
@@ -421,122 +455,53 @@
             }
             <h1>{{ mascota.name }}</h1>
             <p>{{ mascota.breed || mascota.species }} · {{ edadMascota(mascota.ageYears) }} @if (mascota.weightKg !== null) { · {{ mascota.weightKg }} kg }</p>
-            <span class="status white"><i></i>{{ mascota.id === 'demo-luna' && mascotaPerdida ? 'Reportada como perdida' : mascota.pending ? 'Guardada en este dispositivo' : 'Perfil registrado' }}</span>
+            <span class="status white" [class.lost-status]="mascotaPerdida"><i></i>{{ mascotaPerdida ? 'Reportada como perdida' : mascota.pending ? 'Guardada en este dispositivo' : 'Perfil registrado' }}</span>
           </div>
-          @if (mascota.id === 'demo-luna') {
-          <article
-            class="lost-panel"
-            [class.active]="mascotaPerdida">
-            <span class="lost-icon">
-              {{ mascotaPerdida ? '⚠' : '🛡️' }}
-            </span>
-
+          <article class="lost-panel" [class.active]="mascotaPerdida">
+            <span class="lost-icon" aria-hidden="true">{{ mascotaPerdida ? '⚠️' : '🛡️' }}</span>
             <div class="grow">
-              <h3>
-                {{
-                  mascotaPerdida
-                    ? 'Modo mascota perdida activo'
-                    : 'Modo mascota perdida'
-                }}
-              </h3>
-
-              <p>
-                {{
-                  mascotaPerdida
-                    ? 'Activado: ' +
-                      fechaAlertaPerdida
-                    : 'Activa una ficha especial al leer la etiqueta NFC.'
-                }}
-              </p>
+              <h3>{{ mascotaPerdida ? 'Modo mascota perdida activo' : '¿Se perdió tu mascota?' }}</h3>
+              <p>{{ mascotaPerdida ? 'Reportada el ' + fechaAlertaPerdida : 'Activa la alerta y prepara un QR con un teléfono de contacto.' }}</p>
             </div>
-
-            <button
-              type="button"
-              (click)="alternarMascotaPerdida()">
-              {{
-                mascotaPerdida
-                  ? 'Marcar encontrada'
-                  : 'Activar'
-              }}
-            </button>
+            <button type="button" (click)="alternarMascotaPerdida()">{{ mascotaPerdida ? 'Marcar encontrada' : 'Activar alerta' }}</button>
           </article>
 
-          <div class="stats">
-            <div>
-              <b>12.4 kg</b>
-              <small>Peso</small>
-            </div>
-
-            <div>
-              <b>Normal</b>
-              <small>Actividad</small>
-            </div>
-
-            <div>
-              <b>36.8 °C</b>
-              <small>Temperatura</small>
-            </div>
-          </div>
-
-          <h2 class="subheading">
-            Información importante
-          </h2>
-
-          <div class="info-list">
-            <div>
-              <span>💉</span>
-              <p>
-                <b>Vacunas</b>
-                <small>
-                  Completas hasta junio de 2027
-                </small>
-              </p>
-            </div>
-
-            <div>
-              <span>🩺</span>
-              <p>
-                <b>Última consulta</b>
-                <small>
-                  12 de agosto de 2026
-                </small>
-              </p>
-            </div>
-
-            <div>
-              <span>📞</span>
-              <p>
-                <b>Contacto</b>
-                <small>
-                  Carlos · 809-555-0142
-                </small>
-              </p>
-            </div>
-          </div>
-
-          <button
-            class="primary wide"
-            type="button"
-            (click)="abrir('sensor')">
-            Ver estado del sensor
-          </button>
-
-          <button
-            class="secondary wide spaced"
-            type="button"
-            (click)="abrir('alertas')">
-            Abrir centro de alertas
-          </button>
-
-          } @else {
-            <h2 class="subheading">Información de {{ mascota.name }}</h2>
-            <div class="info-list">
-              <div><span aria-hidden="true">🐾</span><p><b>Especie y raza</b><small>{{ mascota.species }} · {{ mascota.breed || 'Raza sin especificar' }}</small></p></div>
-              <div><span aria-hidden="true">📋</span><p><b>Sexo y edad</b><small>{{ mascota.sex }} · {{ edadMascota(mascota.ageYears) }}</small></p></div>
-              <div><span aria-hidden="true">⚖</span><p><b>Peso</b><small>{{ mascota.weightKg === null ? 'Sin registrar' : mascota.weightKg + ' kg' }}</small></p></div>
-            </div>
+          @if (mascotaPerdida) {
+            <section class="lost-qr-panel" aria-live="polite">
+              <div>
+                <span class="eyebrow">CÓDIGO DE CONTACTO</span>
+                <h2>Ayuda a que vuelva a casa</h2>
+                <p>El QR incluye el nombre, la especie y el teléfono de contacto guardado en tu cuenta.</p>
+              </div>
+              @if (lostQrLoading()) {
+                <p role="status">Generando QR…</p>
+              } @else if (lostQrError()) {
+                <p class="care-feedback care-feedback-error" role="alert">{{ lostQrError() }}</p>
+              } @else if (lostPetQr(); as qr) {
+                <img class="lost-qr-image" [src]="qr" [alt]="'QR de contacto para ' + mascota.name">
+                <a class="secondary lost-qr-download" [href]="qr" [download]="'petcare-' + mascota.name + '-contacto.png'">Descargar QR</a>
+              }
+            </section>
           }
-          <button class="primary wide spaced" type="button" (click)="abrirCuidadosMascota()">Registrar cuidado de {{ mascota.name }}</button>
+
+          <h2 class="subheading">Información de {{ mascota.name }}</h2>
+          <div class="info-list">
+            <div><span aria-hidden="true">🐾</span><p><b>Especie y raza</b><small>{{ mascota.species }} · {{ mascota.breed || 'Raza sin especificar' }}</small></p></div>
+            <div><span aria-hidden="true">📋</span><p><b>Sexo y edad</b><small>{{ mascota.sex }} · {{ edadMascota(mascota.ageYears) }}</small></p></div>
+            <div><span aria-hidden="true">⚖️</span><p><b>Peso</b><small>@if (ultimoControl(mascota.id); as control) { {{ control.weightKg === null ? (mascota.weightKg === null ? 'Sin registrar' : mascota.weightKg + ' kg') : control.weightKg + ' kg' }} } @else { {{ mascota.weightKg === null ? 'Sin registrar' : mascota.weightKg + ' kg' }} }</small></p></div>
+            @if (ultimoControl(mascota.id); as control) {
+              @if (control.temperatureC !== null) { <div><span aria-hidden="true">🌡️</span><p><b>Última temperatura</b><small>{{ control.temperatureC }} °C · {{ control.dueAt | date: 'd MMM y' }}</small></p></div> }
+            }
+          </div>
+
+          @if (planesPendientesMascota(mascota.id).length > 0) {
+            <h2 class="subheading">Cuidados programados</h2>
+            <div class="profile-upcoming-list">
+              @for (entry of planesPendientesMascota(mascota.id); track entry.id) {
+                <article><span>{{ entry.type }}</span><b>{{ entry.title }}</b><small>{{ recordatorioLabel(entry) }} · {{ entry.dueAt | date: 'd MMM y, h:mm a' }}</small></article>
+              }
+            </div>
+          }          <button class="primary wide spaced" type="button" (click)="abrirCuidadosMascota()">Registrar cuidado de {{ mascota.name }}</button>
         </section>
         }
       }
@@ -783,6 +748,134 @@
         </section>
       }
 
+      @case ('cuidados') {
+        <section class="page">
+          <button class="back" type="button" (click)="abrir('inicio')">← Inicio</button>
+          <div class="page-heading">
+            <div>
+              <span class="eyebrow">Bienestar y prevención</span>
+              <h1>Cuidados</h1>
+            </div>
+            <span class="care-reminder-count">{{ carePlan.reminderCount() }} próximos</span>
+          </div>
+          <p class="care-intro">Programa citas, vacunas, medicamentos y controles para cada mascota. Los recordatorios quedan guardados en este dispositivo.</p>
+
+          @if (petStore.storageError()) {
+            <div class="pet-sync-status sync-error" role="alert">
+              <p>No se pudieron cargar las mascotas para registrar sus cuidados.</p>
+              <button type="button" class="secondary" (click)="petStore.sync()">Reintentar</button>
+            </div>
+          } @else if (petStore.pets().length === 0) {
+            <article class="care-empty-state">
+              <span aria-hidden="true">🐾</span>
+              <h2>Primero registra una mascota</h2>
+              <p>Sus citas, medicamentos y controles se organizarán en esta sección.</p>
+              <button class="primary wide" type="button" (click)="abrirFormularioMascota()">Agregar mascota</button>
+            </article>
+          } @else {
+            <form class="care-planner-form" #careForm="ngForm" (ngSubmit)="guardarPlanCuidado()">
+              <div class="care-form-title">
+                <span aria-hidden="true">＋</span>
+                <div><small>PLAN PERSONAL</small><h2>Programar cuidado</h2></div>
+              </div>
+
+              <label for="care-plan-pet">Mascota</label>
+              <select id="care-plan-pet" name="carePlanPetId" [(ngModel)]="carePlanPetId" required>
+                @for (pet of petStore.pets(); track pet.id) {
+                  <option [value]="pet.id">{{ pet.name }} · {{ pet.species }}</option>
+                }
+              </select>
+
+              <label for="care-plan-type">Tipo de cuidado</label>
+              <select id="care-plan-type" name="carePlanType" [ngModel]="carePlanType" (ngModelChange)="actualizarTipoCuidado($event)" required>
+                @for (type of carePlanTypes; track type) { <option [value]="type">{{ type }}</option> }
+              </select>
+
+              @if (carePlanType !== 'Control de salud') {
+                <label for="care-plan-title">Nombre o motivo</label>
+                <input id="care-plan-title" name="carePlanTitle" type="text" [(ngModel)]="carePlanTitle" required maxlength="100"
+                  [placeholder]="carePlanType === 'Medicamento' ? 'Ej.: Antiparasitario' : carePlanType === 'Cita veterinaria' ? 'Ej.: Revisión anual' : carePlanType">
+              }
+
+              <label for="care-plan-date">{{ carePlanType === 'Control de salud' ? 'Fecha del control' : 'Fecha y hora del recordatorio' }}</label>
+              <input id="care-plan-date" name="carePlanDueAt" type="datetime-local" [(ngModel)]="carePlanDueAt" required>
+
+              @if (carePlanType === 'Control de salud') {
+                <div class="care-input-columns">
+                  <div>
+                    <label for="care-plan-weight">Peso en kg</label>
+                    <input id="care-plan-weight" name="carePlanWeight" type="number" min="0.01" max="300" step="0.01" [(ngModel)]="carePlanWeight" placeholder="Ej.: 8.5">
+                  </div>
+                  <div>
+                    <label for="care-plan-temperature">Temperatura °C</label>
+                    <input id="care-plan-temperature" name="carePlanTemperature" type="number" min="20" max="50" step="0.1" [(ngModel)]="carePlanTemperature" placeholder="Ej.: 38.5">
+                  </div>
+                </div>
+              }
+
+              <label for="care-plan-details">{{ carePlanType === 'Medicamento' ? 'Dosis y frecuencia' : carePlanType === 'Cita veterinaria' ? 'Veterinaria o notas' : 'Notas' }} <span>(opcional)</span></label>
+              <textarea id="care-plan-details" name="carePlanDetails" [(ngModel)]="carePlanDetails" maxlength="500"
+                [placeholder]="carePlanType === 'Medicamento' ? 'Ej.: 1 tableta con la comida, cada 24 horas' : carePlanType === 'Cita veterinaria' ? 'Ej.: Clínica y motivo de consulta' : 'Agrega un detalle útil para recordar'"></textarea>
+
+              @if (carePlanMessage()) { <p class="care-feedback" role="status">{{ carePlanMessage() }}</p> }
+              @if (carePlan.loadError()) { <p class="care-feedback care-feedback-error" role="alert">No se pudieron leer los cuidados guardados. <button type="button" (click)="carePlan.reload()">Reintentar</button></p> }
+
+              <button class="primary wide" type="submit" [disabled]="careForm.invalid || savingCarePlan()">
+                {{ savingCarePlan() ? 'GUARDANDO…' : carePlanType === 'Control de salud' ? 'GUARDAR CONTROL' : 'GUARDAR RECORDATORIO' }}
+              </button>
+              <small class="care-local-note">Los cambios se guardan en SQLite en este dispositivo y funcionan sin conexión.</small>
+            </form>
+
+            <section class="care-list-section">
+              <div class="care-list-heading">
+                <div><small>AGENDA</small><h2>Pendientes</h2></div>
+                <span>{{ carePlan.pendingEntries().length }}</span>
+              </div>
+              @if (carePlan.isLoading()) {
+                <p class="care-empty-list" role="status">Cargando cuidados guardados…</p>
+              } @else if (carePlan.pendingEntries().length === 0) {
+                <p class="care-empty-list">No hay cuidados pendientes. Programa una cita, vacuna o medicamento arriba.</p>
+              } @else {
+                @for (entry of carePlan.pendingEntries(); track entry.id) {
+                  <article class="care-plan-card">
+                    <div class="care-plan-card-top">
+                      <span class="care-plan-icon" aria-hidden="true">{{ entry.type === 'Cita veterinaria' ? '🩺' : entry.type === 'Vacuna' ? '💉' : entry.type === 'Desparasitación' ? '🛡️' : entry.type === 'Medicamento' ? '💊' : '📈' }}</span>
+                      <span class="care-plan-date" [class.care-plan-overdue]="recordatorioLabel(entry) === 'Vencido'">{{ recordatorioLabel(entry) }}</span>
+                    </div>
+                    <h3>{{ entry.title }}</h3>
+                    <p class="care-plan-pet">{{ entry.petName }} · {{ entry.type }}</p>
+                    <p class="care-plan-datetime">{{ entry.dueAt | date: 'd MMM y, h:mm a' }}</p>
+                    @if (entry.details) { <p class="care-plan-details">{{ entry.details }}</p> }
+                    <div class="care-plan-actions">
+                      <button type="button" (click)="completarPlanCuidado(entry)">Marcar realizado</button>
+                      <button type="button" class="care-plan-delete" (click)="eliminarPlanCuidado(entry)">Eliminar</button>
+                    </div>
+                  </article>
+                }
+              }
+            </section>
+
+            @if (carePlan.completedEntries().length > 0) {
+              <section class="care-list-section care-completed-section">
+                <div class="care-list-heading"><div><small>REGISTRO</small><h2>Realizados</h2></div><span>{{ carePlan.completedEntries().length }}</span></div>
+                @for (entry of carePlan.completedEntries(); track entry.id) {
+                  <article class="care-plan-card care-plan-completed">
+                    <div class="care-plan-card-top"><span class="care-plan-icon" aria-hidden="true">✓</span><span class="care-plan-date">Realizado</span></div>
+                    <h3>{{ entry.title }}</h3>
+                    <p class="care-plan-pet">{{ entry.petName }} · {{ entry.type }}</p>
+                    <p class="care-plan-datetime">{{ entry.dueAt | date: 'd MMM y, h:mm a' }}</p>
+                    @if (entry.weightKg !== null || entry.temperatureC !== null) {
+                      <p class="care-plan-details">@if (entry.weightKg !== null) { Peso: {{ entry.weightKg }} kg } @if (entry.temperatureC !== null) { · Temperatura: {{ entry.temperatureC }} °C }</p>
+                    }
+                    <div class="care-plan-actions"><button type="button" (click)="completarPlanCuidado(entry)">Reactivar</button><button type="button" class="care-plan-delete" (click)="eliminarPlanCuidado(entry)">Eliminar</button></div>
+                  </article>
+                }
+              </section>
+            }
+          }
+        </section>
+      }
+
       @case ('historial') {
         <section class="page">
           <button
@@ -795,7 +888,7 @@
           <div class="page-heading">
             <div>
               <span class="eyebrow">
-                Seguimiento de {{ nombreMascota }}
+                Atenciones de {{ nombreMascota || 'tus mascotas' }}
               </span>
               <h1>Historial</h1>
             </div>
@@ -811,101 +904,179 @@
             <aside class="offline-card">
               <b>Estás sin conexión</b>
               <p>
-                Los cuidados que registres se
-                guardarán de forma segura y se
-                enviarán automáticamente cuando
-                vuelva la conexión.
+                Las atenciones realizadas se guardan en este dispositivo y se envían cuando vuelva la conexión.
               </p>
             </aside>
           }
 
-          <section class="care-form">
-            <small>
-              {{ pendientes.length }}
-              registro(s) pendiente(s) de
-              sincronización
-            </small>
+          @if (petStore.pets().length > 0) {
+            <section class="care-form history-entry-form">
+              <small>{{ historialPendientesCount() }} registro(s) pendiente(s) de sincronización para esta mascota</small>
+              <h2>Anotar una atención realizada</h2>
+              <p>Registra algo que ya ocurrió. Para agendar citas, vacunas o medicamentos futuros, usa la pestaña Cuidados.</p>
 
-            <h2>Registrar cuidado</h2>
+              <label>
+                Mascota
+                <select name="historyPet" [ngModel]="historialMascotaId()" (ngModelChange)="seleccionarMascotaHistorial($event)">
+                  @for (pet of petStore.pets(); track pet.id) {
+                    <option [value]="pet.id">{{ pet.name }}</option>
+                  }
+                </select>
+              </label>
 
-            <label>
-              Nombre de la mascota
-              <input
-                type="text"
-                [(ngModel)]="nombreMascota"
-                placeholder="Ej.: Luna">
-            </label>
+              <label>
+                Tipo de actividad
+                <select name="historyCategory" [(ngModel)]="historyCategory">
+                  @for (category of activityTypes; track category) {
+                    <option [value]="category">{{ category }}</option>
+                  }
+                </select>
+              </label>
 
-            <label>
-              Cuidado realizado
-              <textarea
-                [(ngModel)]="cuidadoRealizado"
-                placeholder="Ej.: Paseo y comida">
-              </textarea>
-            </label>
+              <label>
+                Atención o actividad completada
+                <textarea
+                  name="completedCare"
+                  [(ngModel)]="cuidadoRealizado"
+                  placeholder="Ej.: visita veterinaria, vacuna aplicada o paseo">
+                </textarea>
+              </label>
 
-            <button
-              type="button"
-              (click)="registrarControl()"
-              [disabled]="guardando()">
-              GUARDAR CUIDADO
+              <button
+                type="button"
+                (click)="registrarAtencionRealizada()"
+                [disabled]="guardando()">
+                {{ guardando() ? 'GUARDANDO…' : 'AÑADIR AL HISTORIAL' }}
+                @if (historialPendientesCount() > 0) { <span>{{ historialPendientesCount() }}</span> }
+              </button>
+            </section>
 
-              @if (pendientes.length > 0) {
-                <span>
-                  {{ pendientes.length }}
-                </span>
+            <section class="care-form video-entry-form">
+              <small>DIARIO AUDIOVISUAL</small>
+              <h2>Agregar video de {{ mascotaHistorialSeleccionada()?.name || 'la mascota' }}</h2>
+              <p>Guarda un clip corto para documentar movimiento, conducta o evolución. El video queda en este dispositivo.</p>
+              <label>
+                Nota del video <span>(opcional)</span>
+                <input
+                  type="text"
+                  name="videoCaption"
+                  [(ngModel)]="videoCaption"
+                  maxlength="120"
+                  placeholder="Ej.: seguimiento de su forma de caminar">
+              </label>
+              <div class="video-entry-actions">
+                <button class="video-add-button" type="button" (click)="agregarVideoHistorial()" [disabled]="savingVideo()">
+                  {{ savingVideo() ? 'AGREGANDO…' : 'AGREGAR VIDEO' }}
+                </button>
+                <button class="video-album-launch" type="button" (click)="abrirAlbumVideos()">
+                  ÁLBUM <span>{{ petMedia.clips().length }}</span>
+                </button>
+              </div>
+              <small class="video-limit">MP4, MOV o formato compatible · máximo 60 segundos y 35 MB</small>
+              @if (videoMessage()) {
+                <p class="care-feedback" role="status">{{ videoMessage() }}</p>
               }
-            </button>
-          </section>
+            </section>
+
+          } @else {
+            <section class="care-form history-entry-form">
+              <h2>Historial de atenciones</h2>
+              <p>Registra una mascota para empezar a guardar sus citas y cuidados realizados.</p>
+              <button type="button" (click)="abrirFormularioMascota()">Agregar mascota</button>
+            </section>
+          }
 
           <section class="care-form" aria-live="polite">
-            <h2>Cuidados sincronizados</h2>
+            <small>LÍNEA DE TIEMPO INDIVIDUAL</small>
+            <h2>Historial de {{ mascotaHistorialSeleccionada()?.name || 'la mascota' }}</h2>
 
-            @if (careRecords.isLoadingRecords()) {
-              <p class="helper">Cargando historial desde el servidor…</p>
-            } @else if (careRecords.recordsLoadError()) {
-              <p class="helper">No se pudo cargar el historial del servidor.</p>
-              <button type="button" (click)="careRecords.loadRecords()">
-                VOLVER A INTENTAR
-              </button>
-            } @else if (registrosDelServidor.length === 0) {
-              <p class="helper">Todavía no hay cuidados sincronizados para {{ nombreMascota }}.</p>
+            @if (careRecords.isLoadingRecords() || carePlan.isLoading()) {
+              <p class="helper">Cargando actividades…</p>
             } @else {
-              @for (registro of registrosDelServidor; track registro.id) {
-                <article>
-                  <small>{{ registro.createdAt | date: 'd MMM y, h:mm a' }}</small>
-                  <h3>{{ registro.petName }}</h3>
-                  <p>{{ registro.description }}</p>
-                </article>
+              @if (careRecords.recordsLoadError() || carePlan.loadError()) {
+                <p class="helper">No se pudieron cargar todos los eventos guardados. Revisa la conexión e inténtalo de nuevo.</p>
+                <button type="button" (click)="careRecords.loadRecords(); carePlan.reload()">VOLVER A INTENTAR</button>
+              }
+              @if (historialMascota().length === 0) {
+              <p class="helper">Todavía no hay actividades registradas para esta mascota.</p>
+              } @else {
+              <div class="timeline">
+                @for (event of historialMascota(); track event.id) {
+                  <article class="history-event">
+                    <small>{{ event.occurredAt | date: 'd MMM y, h:mm a' }}</small>
+                    <span>{{ event.category }}</span>
+                    <h3>{{ event.title }}</h3>
+                    @if (event.details) { <p>{{ event.details }}</p> }
+                    @if (event.pendingSync) { <small>Pendiente de sincronización</small> }
+                  </article>
+                }
+              </div>
               }
             }
           </section>
 
-          <div class="timeline">
-            @if (pendientes.length > 0) {
-              @for (
-                registro of pendientes;
-                track registro.id
-              ) {
-                <article>
-                  <span
-                    class="time-icon pending-icon">
-                    ↻
-                  </span>
-
-                  <div>
-                    <small>
-                      Pendiente de sincronización
-                    </small>
-                    <h3>{{ registro.tipo }}</h3>
-                    <p>{{ registro.detalle }}</p>
+          @if (videoAlbumOpen()) {
+            <div class="video-dialog-backdrop" (keydown.escape)="cerrarAlbumVideos()" (click)="cerrarAlbumVideos()">
+              <section class="video-dialog album-dialog" role="dialog" aria-modal="true" aria-labelledby="video-dialog-title" tabindex="-1" (click)="$event.stopPropagation()">
+                @if (selectedVideo(); as clip) {
+                  <header>
+                    <div><small>VIDEO DE {{ clip.petName | uppercase }}</small><h2 id="video-dialog-title">{{ clip.caption || 'Momento de ' + clip.petName }}</h2></div>
+                    <button type="button" (click)="volverAlbumVideos(selectedVideoPlayer)" aria-label="Volver al álbum">←</button>
+                  </header>
+                  <div class="pet-video-player">
+                    <video
+                      #selectedVideoPlayer
+                      [src]="clip.url"
+                      [attr.poster]="clip.poster || null"
+                      [attr.aria-label]="'Video de ' + clip.petName"
+                      playsinline
+                      preload="metadata"
+                      (timeupdate)="actualizarPosicionVideo(clip.id, selectedVideoPlayer)"
+                      (pause)="videoPausado(clip.id)"
+                      (ended)="playingVideoId.set('')">
+                    </video>
+                    <div class="pet-video-controls">
+                      <button type="button" (click)="alternarReproduccionVideo(clip.id, selectedVideoPlayer)" [attr.aria-label]="playingVideoId() === clip.id ? 'Pausar video' : 'Reproducir video'">
+                        {{ playingVideoId() === clip.id ? '❚❚' : '▶' }}
+                      </button>
+                      <input type="range" min="0" [max]="selectedVideoPlayer.duration || clip.durationSeconds" [value]="posicionVideo(clip.id)" [attr.aria-label]="'Posición del video de ' + clip.petName" (input)="buscarVideo(selectedVideoPlayer, $event)">
+                      <small>{{ formatearTiempoVideo(posicionVideo(clip.id)) }} / {{ formatearTiempoVideo(selectedVideoPlayer.duration || clip.durationSeconds) }}</small>
+                      <button type="button" (click)="cambiarVelocidadVideo(selectedVideoPlayer)" [attr.aria-label]="'Velocidad ' + selectedVideoPlayer.playbackRate">{{ selectedVideoPlayer.playbackRate }}×</button>
+                      <button type="button" (click)="alternarSilencioVideo(selectedVideoPlayer)" [attr.aria-label]="selectedVideoPlayer.muted ? 'Activar sonido' : 'Silenciar'">{{ selectedVideoPlayer.muted ? '🔇' : '🔊' }}</button>
+                      <input class="video-volume" type="range" min="0" max="1" step="0.05" [value]="selectedVideoPlayer.muted ? 0 : selectedVideoPlayer.volume" [attr.aria-label]="'Volumen del video de ' + clip.petName" (input)="ajustarVolumenVideo(selectedVideoPlayer, $event)">
+                      <button type="button" (click)="expandirVideo(selectedVideoPlayer)" aria-label="Pantalla completa">⛶</button>
+                    </div>
                   </div>
-                </article>
-              }
-            }
-
-          </div>
-
+                  <p class="video-dialog-date">{{ clip.createdAt | date: 'd MMMM y, h:mm a' }}</p>
+                } @else {
+                  <header>
+                    <div><small>DIARIO AUDIOVISUAL</small><h2 id="video-dialog-title">Álbum de {{ mascotaHistorialSeleccionada()?.name || 'la mascota' }}</h2></div>
+                    <button type="button" (click)="cerrarAlbumVideos()" aria-label="Cerrar álbum">×</button>
+                  </header>
+                  @if (petMedia.clips().length === 0) {
+                    <p class="video-album-empty">Todavía no hay videos. Usa “Agregar video” para elegir un clip de la galería.</p>
+                  } @else {
+                    <div class="video-album-grid">
+                      @for (clip of petMedia.clips(); track clip.id) {
+                        <article class="video-album-item">
+                          <button class="video-album-open" type="button" (click)="abrirReproductorVideo(clip)" [attr.aria-label]="'Reproducir video: ' + (clip.caption || clip.petName)">
+                            <span class="video-album-thumb">
+                              @if (clip.poster) { <img [src]="clip.poster" alt=""> } @else { <span aria-hidden="true">▶</span> }
+                              <span class="video-album-play" aria-hidden="true">▶</span>
+                              <small>{{ formatearTiempoVideo(clip.durationSeconds) }}</small>
+                            </span>
+                            <b>{{ clip.caption || 'Video de ' + clip.petName }}</b>
+                            <small>{{ clip.createdAt | date: 'd MMM y, h:mm a' }}</small>
+                          </button>
+                          <button class="video-album-delete" type="button" (click)="eliminarVideoHistorial(clip)" [attr.aria-label]="'Eliminar video de ' + clip.petName">Eliminar</button>
+                        </article>
+                      }
+                    </div>
+                  }
+                }
+              </section>
+            </div>
+          }
           <button
             class="sync-now"
             type="button"

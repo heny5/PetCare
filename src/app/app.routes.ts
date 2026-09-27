@@ -21,6 +21,10 @@ export const routes: Routes = [
         loadComponent: () => import('./tabs/pets-tab.page').then((m) => m.PetsTabPage),
       },
       {
+        path: 'care',
+        loadComponent: () => import('./tabs/care-tab.page').then((m) => m.CareTabPage),
+      },
+      {
         path: 'nfc',
         loadComponent: () => import('./tabs/nfc-tab.page').then((m) => m.NfcTabPage),
       },

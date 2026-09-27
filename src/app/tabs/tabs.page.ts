@@ -10,9 +10,9 @@ import {
   IonTabs,
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
-import { homeOutline, pawOutline, radioOutline, timeOutline } from 'ionicons/icons';
+import { calendarOutline, homeOutline, pawOutline, radioOutline, timeOutline } from 'ionicons/icons';
 
-const TAB_ROUTES = ['/tabs/home', '/tabs/pets', '/tabs/nfc', '/tabs/history'] as const;
+const TAB_ROUTES = ['/tabs/home', '/tabs/pets', '/tabs/care', '/tabs/nfc', '/tabs/history'] as const;
 
 @Component({
   selector: 'app-tabs',
@@ -29,7 +29,7 @@ export class TabsPage implements AfterViewInit, OnDestroy {
   private pageSwipe?: Gesture;
 
   constructor() {
-    addIcons({ homeOutline, pawOutline, radioOutline, timeOutline });
+    addIcons({ calendarOutline, homeOutline, pawOutline, radioOutline, timeOutline });
   }
 
   ngAfterViewInit(): void {

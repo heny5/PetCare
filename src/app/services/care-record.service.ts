@@ -2,11 +2,27 @@ import { Injectable, OnDestroy, computed, effect, inject, signal, untracked } fr
 import { environment } from '../../environments/environment';
 import { ConnectivityService } from './connectivity.service';
 
+export const CARE_ACTIVITY_TYPES = [
+  'Paseo',
+  'Alimentación',
+  'Medicamento',
+  'Vacuna',
+  'Desparasitación',
+  'Cita veterinaria',
+  'Higiene y cuidado',
+  'Otro',
+] as const;
+
+export type CareActivityType = typeof CARE_ACTIVITY_TYPES[number];
+
 export interface CareRecord {
   id: string;
   petName: string;
   description: string;
   createdAt: string;
+  category?: CareActivityType;
+  petId?: string;
+  owner?: string;
 }
 
 export interface PendingCareRecord extends CareRecord {
@@ -268,5 +284,12 @@ function isCareRecord(value: unknown): value is CareRecord {
   return typeof record.id === 'string' &&
     typeof record.petName === 'string' &&
     typeof record.description === 'string' &&
-    typeof record.createdAt === 'string';
+    typeof record.createdAt === 'string' &&
+    (record.category === undefined || isCareActivityType(record.category)) &&
+    (record.petId === undefined || typeof record.petId === 'string') &&
+    (record.owner === undefined || typeof record.owner === 'string');
+}
+
+function isCareActivityType(value: unknown): value is CareActivityType {
+  return typeof value === 'string' && CARE_ACTIVITY_TYPES.includes(value as CareActivityType);
 }
