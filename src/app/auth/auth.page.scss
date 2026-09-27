@@ -13,7 +13,7 @@
 .auth-brand { height: 78px; padding: 14px 20px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #edf2f0; }
 .brand-mark { width: 43px; height: 43px; display: grid; place-items: center; font-size: 22px; background: var(--green); border-radius: 14px; box-shadow: 0 7px 16px rgba(21,134,111,.22); }
 .auth-brand b,.auth-brand small { display: block; }.auth-brand b { font-size: 20px; }.auth-brand small { color: var(--muted); font-size: 11px; margin-top: 1px; }
-.auth-page { display: grid; min-height: calc(100dvh - 78px); place-items: center; padding: 24px 20px 36px; }
+.auth-page { display: grid; min-height: calc(100dvh - 78px); place-items: start center; padding: clamp(28px, 6vh, 48px) 20px 36px; }
 .auth-card { width: 100%; padding: 24px 20px; border: 1px solid var(--line); border-radius: 20px; background: white; }
 .eyebrow { display: inline-block; color: var(--green); font-size: 12px; font-weight: 850; text-transform: uppercase; margin-bottom: 8px; }
 h1 { margin: 0 0 22px; font-size: 28px; line-height: 1.12; color: var(--ink); }
