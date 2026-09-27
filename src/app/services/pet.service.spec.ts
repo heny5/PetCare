@@ -20,7 +20,7 @@ describe('PetService', () => {
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     network = TestBed.inject(ConnectivityService);
-    network.setDemoOnline(false);
+    network.updateNetworkStatus(false);
   });
   afterEach(() => {
     TestBed.resetTestingModule();
@@ -50,7 +50,7 @@ describe('PetService', () => {
     const pet = service.add(draft);
     TestBed.tick();
     fetchMock.mockResolvedValueOnce(reply([])).mockResolvedValueOnce(reply({ record: pet }));
-    network.useRealNetwork();
+    network.updateNetworkStatus(true);
     window.dispatchEvent(new Event('online'));
     TestBed.tick();
     await vi.advanceTimersByTimeAsync(0);
@@ -67,7 +67,7 @@ describe('PetService', () => {
     const pet = service.add(draft);
     TestBed.tick();
     fetchMock.mockResolvedValueOnce(reply([])).mockRejectedValueOnce(new Error('Response lost'));
-    network.setDemoOnline(true);
+    network.updateNetworkStatus(true);
     TestBed.tick();
     await vi.advanceTimersByTimeAsync(0);
     expect(service.pendingCount()).toBe(1);
@@ -89,7 +89,7 @@ describe('PetService', () => {
     fetchMock.mockImplementation((_url, options: RequestInit) => new Promise((_resolve, reject) => {
       options.signal?.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
     }));
-    network.setDemoOnline(true);
+    network.updateNetworkStatus(true);
     TestBed.tick();
     expect(service.isSynchronizing()).toBe(true);
     await vi.advanceTimersByTimeAsync(10_000);
@@ -103,7 +103,7 @@ describe('PetService', () => {
     let resolveDownload!: (value: ReturnType<typeof reply>) => void;
     fetchMock.mockReturnValueOnce(new Promise((resolve) => { resolveDownload = resolve; }));
     fetchMock.mockResolvedValue(reply({}));
-    network.setDemoOnline(true);
+    network.updateNetworkStatus(true);
     service.activate();
     TestBed.tick();
     const added = service.add(draft);
@@ -138,7 +138,7 @@ describe('PetService', () => {
     fetchMock.mockResolvedValueOnce(reply([]))
       .mockImplementationOnce(() => new Promise((resolve) => { acknowledge = resolve; }))
       .mockResolvedValue(reply({}));
-    network.setDemoOnline(true);
+    network.updateNetworkStatus(true);
     TestBed.tick();
     await vi.advanceTimersByTimeAsync(0);
     service.update(pet.id, { ...draft, name: 'Nuevo' });
@@ -170,7 +170,7 @@ describe('PetService', () => {
   it('preserves unreadable local data instead of replacing it with a remote list', async () => {
     localStorage.setItem(key, 'unreadable');
     const service = TestBed.inject(PetService);
-    network.setDemoOnline(true);
+    network.updateNetworkStatus(true);
     service.activate();
     TestBed.tick();
     await service.sync();

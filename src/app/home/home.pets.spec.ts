@@ -19,9 +19,9 @@ describe('HomePage pet registration', () => {
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     TestBed.configureTestingModule({ imports: [HomePage], providers: [provideRouter([])] });
-    TestBed.inject(ConnectivityService).setDemoOnline(false);
     fixture = TestBed.createComponent(HomePage);
     await fixture.whenStable();
+    TestBed.inject(ConnectivityService).updateNetworkStatus(false);
     button('Ver mis mascotas').click();
     await fixture.whenStable();
     (fixture.nativeElement.querySelector('[aria-label="Agregar mascota"]') as HTMLButtonElement).click();
@@ -88,7 +88,7 @@ describe('HomePage pet registration', () => {
     });
     expect(fixture.nativeElement.querySelector('[aria-label="Ver ficha de Nala"]').textContent).toContain('Pendiente');
     fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
-    button('En línea').click();
+    TestBed.inject(ConnectivityService).updateNetworkStatus(true);
     await fixture.whenStable();
     await fixture.componentInstance.petStore.sync();
     await fixture.whenStable();

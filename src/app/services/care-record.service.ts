@@ -221,7 +221,7 @@ export class CareRecordService implements OnDestroy {
         if (!ids.has(item.id)) {
           queue.push({
             id: item.id,
-            petName: item.tipo.replace(/^Cuidado de\s+/, '').trim() || 'Luna',
+            petName: item.tipo.replace(/^Cuidado de\s+/, '').trim() || 'Mascota',
             description: item.detalle,
             createdAt: item.fecha,
             queuedAt: item.fecha,

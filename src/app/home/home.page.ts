@@ -101,7 +101,8 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   readonly fotosMascota = signal<Record<string, string>>(this.leerFotosMascota());
   readonly errorFoto = signal('');
   readonly opcionesFotoAbiertas = signal(false);
-  private readonly mascotaId = signal('demo-luna');
+  readonly usuarioMenuAbierto = signal(false);
+  private readonly mascotaId = signal('');
   readonly mascotaSeleccionada = computed<StoredPet | undefined>(() =>
     this.petStore.pets().find((pet) => pet.id === this.mascotaId()) ?? this.petStore.pets()[0]
   );
@@ -123,7 +124,6 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   get mensaje(): string { return this.mensajeLocal(); }
   set mensaje(value: string) { this.mensajeLocal.set(value); }
   get enLinea(): boolean { return this.connectivity.isOnline(); }
-  get modoDemostracion(): boolean { return this.connectivity.isDemoMode(); }
   get sincronizando(): boolean { return this.careRecords.isSynchronizing(); }
   get pendientes() { return this.registrosPendientes(); }
   get buscandoBluetooth(): boolean { return this.deviceLink.isScanningBluetooth(); }
@@ -151,7 +151,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   fechaAlertaPerdida = '';
   hallazgoRegistrado = false;
 
-  nombreMascota = 'Luna';
+  nombreMascota = '';
   cuidadoRealizado = '';
 
   alertas: AlertaCollar[] = [
@@ -179,7 +179,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       titulo:
         'Actividad fuera de lo normal',
       detalle:
-        'Luna permaneció inactiva más tiempo de lo habitual.',
+        'La mascota permaneció inactiva más tiempo de lo habitual.',
       hora: 'Ayer · 9:10 p. m.',
       revisada: true
     }
@@ -212,6 +212,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     this.cargarEstadoLocal();
+    if (this.initialView === 'inicio') this.petStore.activate();
     try {
       const estado = await Network.getStatus();
       if (this.destroyed) return;
@@ -236,6 +237,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   async cerrarSesion(popover: IonPopover): Promise<void> {
     await popover.dismiss();
+    this.usuarioMenuAbierto.set(false);
     this.auth.logout();
     await this.router.navigateByUrl('/login', { replaceUrl: true });
   }
@@ -262,9 +264,14 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   ngOnChanges(): void {
     if (!this.initialView) return;
-    this.vista = this.initialView;
-    if (this.vista === 'mascotas' || this.vista === 'nfc') this.petStore.activate();
-    if (this.vista === 'historial') void this.careRecords.loadRecords();
+    this.activarPestana(this.initialView);
+  }
+
+  activarPestana(vista: Vista): void {
+    this.vista = vista;
+    this.mascotaPorEliminar = null;
+    if (vista === 'mascotas' || vista === 'nfc') this.petStore.activate();
+    if (vista === 'historial') void this.careRecords.loadRecords();
   }
 
   async actualizarContenido(event: RefresherCustomEvent): Promise<void> {
@@ -580,20 +587,6 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.connectivity.updateNetworkStatus(status.connected);
   }
 
-  cambiarConexionDemo(conectado: boolean): void {
-    this.connectivity.setDemoOnline(conectado);
-    this.mensaje = conectado
-      ? 'Modo demostración: conexión recuperada.'
-      : 'Modo demostración: ahora estás sin conexión.';
-    if (conectado) void this.careRecords.syncPending();
-  }
-
-  usarEstadoReal(): void {
-    this.connectivity.useRealNetwork();
-    this.mensaje = 'PetCare volvió a utilizar el estado real de la red.';
-    if (this.enLinea) void this.careRecords.syncPending();
-  }
-
   alternarMascotaPerdida(): void {
     this.mascotaPerdida =
       !this.mascotaPerdida;
@@ -614,7 +607,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.mensaje =
       this.mascotaPerdida
         ? 'Alerta activada. La lectura NFC mostrará la ficha de mascota perdida.'
-        : 'Luna fue marcada como encontrada. La alerta quedó desactivada.';
+        : `${this.nombreMascota || 'La mascota'} fue marcada como encontrada. La alerta quedó desactivada.`;
 
     this.guardarEstadoLocal();
   }
@@ -641,7 +634,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       );
 
     this.mensaje =
-      'Alerta marcada como revisada y añadida al historial de Luna.';
+      `Alerta marcada como revisada y añadida al historial de ${this.nombreMascota || 'la mascota'}.`;
 
     this.guardarEstadoLocal();
   }

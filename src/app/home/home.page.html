@@ -21,18 +21,20 @@
       </button>
 
       <button
-        id="user-menu-trigger"
         class="avatar"
         type="button"
-        aria-label="Abrir menú de usuario">
+        aria-label="Abrir menú de usuario"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="usuarioMenuAbierto()"
+        (click)="usuarioMenuAbierto.set(true)">
         <ion-icon name="person-circle-outline" aria-hidden="true"></ion-icon>
       </button>
     </header>
 
     <ion-popover
   #userPopover
-  trigger="user-menu-trigger"
-  triggerAction="click"
+  [isOpen]="usuarioMenuAbierto()"
+  (didDismiss)="usuarioMenuAbierto.set(false)"
   side="bottom"
   alignment="end"
   class="user-popover"
@@ -63,7 +65,7 @@
           {{
             enLinea
               ? '✓ Conectado a la red'
-              : '⚠ Estás sin conexión a internet (Modo Offline)'
+              : '⚠ Estás sin conexión a internet'
           }}
         </b>
 
@@ -78,37 +80,6 @@
         </small>
       </div>
     </aside>
-
-    <div class="demo-network">
-      <span>
-        <b>Modo demostración</b>
-        <small>
-          Control manual para la presentación
-        </small>
-      </span>
-
-      <button
-        type="button"
-        [class.selected]="modoDemostracion && enLinea"
-        (click)="cambiarConexionDemo(true)">
-        En línea
-      </button>
-
-      <button
-        type="button"
-        class="offline-choice"
-        [class.selected]="modoDemostracion && !enLinea"
-        (click)="cambiarConexionDemo(false)">
-        Offline
-      </button>
-
-      <button
-        type="button"
-        [class.selected]="!modoDemostracion"
-        (click)="usarEstadoReal()">
-        Red real
-      </button>
-    </div>
 
     @switch (vista) {
       @case ('inicio') {
@@ -196,30 +167,27 @@
             </button>
           </div>
 
-          <article class="pet-summary">
-            <div class="pet-photo">🐕</div>
-
-            <div class="grow">
-              <small>Mascota principal</small>
-              <h3>Luna</h3>
-              <p>Beagle · 4 años</p>
-            </div>
-
-            <span
-              class="status"
-              [class.lost-status]="mascotaPerdida">
-              <i></i>
-              {{
-                mascotaPerdida
-                  ? 'Perdida'
-                  : 'Saludable'
-              }}
-            </span>
-          </article>
+          @if (mascotaSeleccionada(); as mascota) {
+            <article class="pet-summary">
+              <div class="pet-photo">
+                @if (fotosMascota()[mascota.id]; as foto) {
+                  <img [src]="foto" [alt]="'Foto de ' + mascota.name">
+                } @else {
+                  {{ iconoMascota(mascota.species) }}
+                }
+              </div>
+              <div class="grow">
+                <small>Mascota principal</small>
+                <h3>{{ mascota.name }}</h3>
+                <p>{{ mascota.breed || mascota.species }} · {{ edadMascota(mascota.ageYears) }}</p>
+              </div>
+              <span class="status"><i></i>{{ mascota.pending ? 'Pendiente de sincronización' : 'Registrada' }}</span>
+            </article>
+          }
 
           @if (!enLinea) {
             <aside class="offline-card">
-              <b>Estás en modo offline</b>
+              <b>Estás sin conexión</b>
               <p>
                 Los cuidados que registres se
                 guardarán de forma segura y se
@@ -325,7 +293,13 @@
             </section>
           }
           @if (petStore.storageError()) {
-            <p class="success sync-error" role="alert">No se pudieron leer las mascotas guardadas. Los datos anteriores se conservaron.</p>
+            <div class="pet-sync-status sync-error" role="alert">
+              <p>No se pudieron cargar las mascotas guardadas. Revisa tu conexión de almacenamiento e inténtalo de nuevo.</p>
+              @if (petStore.storageErrorDetail()) {
+                <small>Detalle: {{ petStore.storageErrorDetail() }}</small>
+              }
+              <button type="button" class="secondary" (click)="petStore.sync()">Reintentar</button>
+            </div>
           } @else if (petStore.isSynchronizing()) {
             <p class="pet-sync-status" role="status">Sincronizando mascotas…</p>
           } @else if (petStore.syncError()) {
@@ -655,7 +629,7 @@
             class="back"
             type="button"
             (click)="seleccionarMascota(petStore.pets()[0])">
-            ← Perfil de Luna
+            ← Perfil de {{ nombreMascota || 'mascota' }}
           </button>
 
           <div class="page-heading">
@@ -835,7 +809,7 @@
 
           @if (!enLinea) {
             <aside class="offline-card">
-              <b>Estás en modo offline</b>
+              <b>Estás sin conexión</b>
               <p>
                 Los cuidados que registres se
                 guardarán de forma segura y se
@@ -930,69 +904,6 @@
               }
             }
 
-            @if (mascotaSeleccionada()?.id === 'demo-luna' && nombreMascota === 'Luna') {
-            <article>
-              <span class="time-icon green">
-                ✓
-              </span>
-
-              <div>
-                <small>
-                  Hoy · 8:20 a. m.
-                </small>
-                <h3>
-                  Lectura del sensor normal
-                </h3>
-                <p>
-                  Temperatura 36.8 °C y
-                  actividad estable.
-                </p>
-              </div>
-            </article>
-
-            <article>
-              <span class="time-icon blue">
-                💉
-              </span>
-
-              <div>
-                <small>12 de septiembre</small>
-                <h3>Vacuna registrada</h3>
-                <p>
-                  Refuerzo anual aplicado por
-                  la Dra. Pérez.
-                </p>
-              </div>
-            </article>
-
-            <article>
-              <span class="time-icon amber">
-                ⚖
-              </span>
-
-              <div>
-                <small>2 de septiembre</small>
-                <h3>Control de peso</h3>
-                <p>
-                  12.4 kg. Variación de +0.2 kg.
-                </p>
-              </div>
-            </article>
-
-            <article>
-              <span class="time-icon violet">
-                📱
-              </span>
-
-              <div>
-                <small>28 de agosto</small>
-                <h3>Etiqueta NFC vinculada</h3>
-                <p>
-                  Identificador PET-LUNA-001.
-                </p>
-              </div>
-            </article>
-            }
           </div>
 
           <button
@@ -1028,7 +939,7 @@
           <div class="page-heading">
             <div>
               <span class="eyebrow">
-                Collar de Luna
+                Collar de {{ nombreMascota || 'mascota' }}
               </span>
               <h1>Centro de alertas</h1>
             </div>
@@ -1099,7 +1010,7 @@
             class="secondary wide"
             type="button"
             (click)="abrir('historial')">
-            Ver historial de Luna
+            Ver historial de {{ nombreMascota || 'la mascota' }}
           </button>
 
           @if (mensaje) {
@@ -1128,7 +1039,7 @@
           <h1>Compartir expediente</h1>
 
           <p class="lead">
-            Selecciona los datos de Luna que
+            Selecciona los datos de {{ nombreMascota || 'tu mascota' }} que
             deseas enviar a otro dispositivo
             cercano.
           </p>
