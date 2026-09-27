@@ -19,7 +19,7 @@ import type {
   PluginListenerHandle
 } from '@capacitor/core';
 
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Camera, CameraErrorCode, EncodingType, MediaTypeSelection } from '@capacitor/camera';
 import { IonContent, IonIcon, IonPopover } from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import { personCircleOutline } from 'ionicons/icons';
