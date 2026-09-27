@@ -334,7 +334,13 @@
             <button type="button" class="pet-card pet-card-button"
               [class.featured]="mascota.id === 'demo-luna'"
               [attr.aria-label]="'Ver ficha de ' + mascota.name" (click)="seleccionarMascota(mascota)">
-              <span class="pet-photo large" [class.cat]="mascota.species === 'Gato'" aria-hidden="true">{{ iconoMascota(mascota.species) }}</span>
+              <span class="pet-photo large pet-card-photo" [class.cat]="mascota.species === 'Gato'" aria-hidden="true">
+                @if (fotosMascota()[mascota.id]; as foto) {
+                  <img [src]="foto" alt="">
+                } @else {
+                  {{ iconoMascota(mascota.species) }}
+                }
+              </span>
               <span class="grow">
                 <span class="pet-name">{{ mascota.name }}</span>
                 <span class="pet-description">{{ mascota.breed || mascota.species }} · {{ mascota.sex }} · {{ edadMascota(mascota.ageYears) }}</span>
@@ -409,7 +415,29 @@
         <section class="page">
           <button class="back" type="button" (click)="abrir('mascotas')">← Mis mascotas</button>
           <div class="profile-cover" [class.lost-cover]="mascota.id === 'demo-luna' && mascotaPerdida">
-            <div class="pet-photo xlarge" [class.cat]="mascota.species === 'Gato'">{{ iconoMascota(mascota.species) }}</div>
+            <div class="pet-photo xlarge profile-photo" [class.cat]="mascota.species === 'Gato'">
+              @if (fotosMascota()[mascota.id]; as foto) {
+                <img [src]="foto" [alt]="'Foto de ' + mascota.name">
+              } @else {
+                {{ iconoMascota(mascota.species) }}
+              }
+            </div>
+            <button class="edit-photo-button" type="button" (click)="alternarOpcionesFoto()" [attr.aria-expanded]="opcionesFotoAbiertas()">
+              Editar foto
+            </button>
+            @if (opcionesFotoAbiertas()) {
+              <div class="photo-actions" aria-label="Opciones de foto">
+                <button class="photo-action" type="button" (click)="agregarFotoGaleria()">
+                  <span aria-hidden="true">▧</span> Agregar de la galería
+                </button>
+                <button class="photo-action" type="button" (click)="tomarFoto()">
+                  <span aria-hidden="true">◎</span> Abrir cámara
+                </button>
+              </div>
+            }
+            @if (errorFoto()) {
+              <p class="photo-error" role="alert">{{ errorFoto() }}</p>
+            }
             <h1>{{ mascota.name }}</h1>
             <p>{{ mascota.breed || mascota.species }} · {{ edadMascota(mascota.ageYears) }} @if (mascota.weightKg !== null) { · {{ mascota.weightKg }} kg }</p>
             <span class="status white"><i></i>{{ mascota.id === 'demo-luna' && mascotaPerdida ? 'Reportada como perdida' : mascota.pending ? 'Guardada en este dispositivo' : 'Perfil registrado' }}</span>
