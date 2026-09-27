@@ -118,7 +118,19 @@ Para comprobar los reintentos, inicia aplicación y API por separado, detén sol
 
 La ruta `/location` incluye geolocalización mediante Capacitor, un mapa Leaflet con teselas de OpenStreetMap, búsqueda de ubicaciones mediante Nominatim, consulta de lugares cercanos mediante Overpass y una acción para compartir la ubicación con Capacitor Share. Su disponibilidad depende de los permisos y las capacidades del dispositivo; los recursos externos del mapa y las búsquedas requieren conexión.
 
-En `HomePage`, la búsqueda y conexión Bluetooth, la lectura NFC y la preparación del expediente para compartir son simulaciones de interfaz. Las alertas iniciales también son datos de demostración.
+### NFC y Bluetooth LE en Android
+
+La vista de conectividad utiliza `@capacitor-community/bluetooth-le` para escanear equipos BLE cercanos y conectarse a uno encontrado. La vista NFC utiliza `@capgo/capacitor-nfc` para leer etiquetas NDEF y escribir en ellas una ficha básica de mascota (nombre, especie y raza). Al leer una ficha PetCare, la app muestra sus datos y abre el perfil local cuando encuentra una coincidencia.
+
+`npm start` ejecuta la versión web y la API; el escaneo NFC requiere ejecutar la app nativa en un teléfono con NFC. Bluetooth en la web depende del navegador y sus permisos, así que para probar ambas funciones usa Android con Bluetooth activo y acerca una etiqueta NFC NDEF. El proyecto incluye la plataforma Android. Después de compilar los recursos web, sincroniza y ejecuta la app en un dispositivo o emulador configurado con Android Studio:
+
+~~~powershell
+npm run build
+npx cap sync android
+npx cap run android
+~~~
+
+Las lecturas del sensor y las alertas iniciales siguen siendo datos demostrativos; la conexión BLE implementada permite descubrir equipos y establecer la conexión GATT.
 
 ## Archivos principales
 
@@ -130,6 +142,7 @@ En `HomePage`, la búsqueda y conexión Bluetooth, la lectura NFC y la preparaci
 | `src/app/location/location.page.ts` | Geolocalización, mapa y acción para compartir ubicación. |
 | `src/app/services/places.ts` | Consultas de ubicaciones y lugares cercanos. |
 | `src/app/services/connectivity.service.ts` | Estado compartido de red real y modo demostración. |
+| `src/app/services/device-link.service.ts` | Escaneo BLE, conexión GATT y lectura/escritura NFC. |
 | `src/app/services/care-record.service.ts` | Cola persistente, migración, timeout y reintentos de sincronización. |
 | `src/environments/environment.ts` | Endpoint de desarrollo para `CareRecordService`. |
 | `src/environments/environment.prod.ts` | Endpoint de producción para `CareRecordService`. |

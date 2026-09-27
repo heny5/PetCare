@@ -583,69 +583,53 @@
           </div>
 
           <span class="eyebrow">
-            Simulación Bluetooth Low Energy
+            Bluetooth Low Energy real
           </span>
 
           <h1>Conectar dispositivo</h1>
 
           <p class="lead">
-            Simula la búsqueda y vinculación de
-            un collar PetCare cercano.
+            Escanea dispositivos BLE cercanos y conecta con un collar compatible.
           </p>
 
-          @if (
-            !dispositivoEncontrado &&
-            !buscandoBluetooth
-          ) {
-            <button
-              class="primary wide"
-              type="button"
-              (click)="buscarDispositivos()">
-              BUSCAR DISPOSITIVOS
-            </button>
-          }
+          <button
+            class="primary wide"
+            type="button"
+            [disabled]="buscandoBluetooth"
+            (click)="buscarDispositivos()">
+            {{ buscandoBluetooth ? 'ESCANEANDO…' : dispositivoEncontrado ? 'VOLVER A ESCANEAR' : 'BUSCAR DISPOSITIVOS CERCANOS' }}
+          </button>
 
           @if (buscandoBluetooth) {
             <div class="ble-state">
               <span class="spinner"></span>
-              <b>Buscando collar cercano…</b>
+              <b>Buscando dispositivos cercanos…</b>
               <small>Bluetooth LE activo</small>
             </div>
           }
 
-          @if (dispositivoEncontrado) {
+          @for (resultado of deviceLink.bluetoothDevices(); track resultado.device.deviceId) {
             <div class="device-row">
               <span class="device-icon">🐾</span>
 
               <div class="grow">
-                <b>Collar PetCare PC-01</b>
+                <b>{{ resultado.device.name || resultado.localName || 'Dispositivo sin nombre' }}</b>
                 <small>
-                  {{
-                    dispositivoConectado
-                      ? 'Conectado · Batería 78%'
-                      : 'Disponible · Señal fuerte'
-                  }}
+                  {{ deviceLink.connectedBluetoothDeviceId() === resultado.device.deviceId ? 'Conectado' : 'Detectado' }}
+                  @if (resultado.rssi !== undefined) { · {{ resultado.rssi }} dBm }
                 </small>
               </div>
 
-              <span class="signal">▂▄▆</span>
+              @if (deviceLink.connectedBluetoothDeviceId() === resultado.device.deviceId) {
+                <button class="secondary" type="button" (click)="desconectar()">Desconectar</button>
+              } @else {
+                <button class="primary" type="button" (click)="conectar(resultado.device.deviceId)">Conectar</button>
+              }
             </div>
+          }
 
-            @if (!dispositivoConectado) {
-              <button
-                class="primary wide"
-                type="button"
-                (click)="conectar()">
-                CONECTAR COLLAR
-              </button>
-            } @else {
-              <button
-                class="secondary wide"
-                type="button"
-                (click)="desconectar()">
-                DESCONECTAR COLLAR
-              </button>
-            }
+          @if (!buscandoBluetooth && !dispositivoEncontrado) {
+            <p class="helper">Los dispositivos encontrados aparecerán aquí.</p>
           }
 
           @if (mensaje) {
@@ -677,7 +661,7 @@
           <div class="page-heading">
             <div>
               <span class="eyebrow">
-                Collar PetCare PC-01
+                {{ nombreDispositivoConectado }}
               </span>
               <h1>Estado del sensor</h1>
             </div>
@@ -776,84 +760,51 @@
             a la etiqueta colocada en el collar.
           </p>
 
+          <p class="lead">
+            Lee una ficha PetCare de una etiqueta o escribe la ficha de {{ mascotaSeleccionada()?.name || 'tu mascota' }} para compartirla.
+          </p>
+
           <button
             class="primary wide"
             type="button"
-            (click)="simularNfc()">
-            Simular lectura NFC
+            [disabled]="deviceLink.isNfcBusy()"
+            (click)="leerEtiquetaNfc()">
+            {{ deviceLink.isNfcBusy() ? 'ACERCA LA ETIQUETA…' : 'LEER ETIQUETA NFC' }}
           </button>
 
-          @if (lecturaNfc) {
-            @if (mascotaPerdida) {
-              <article class="emergency-card">
-                <span class="emergency-label">
-                  ⚠ MASCOTA PERDIDA
-                </span>
+          <button
+            class="secondary wide spaced"
+            type="button"
+            [disabled]="deviceLink.isNfcBusy() || !mascotaSeleccionada()"
+            (click)="compartirFichaNfc()">
+            COMPARTIR FICHA EN UNA ETIQUETA
+          </button>
 
-                <div class="pet-photo xlarge">
-                  🐕
-                </div>
-
-                <h2>
-                  Luna necesita volver a casa
-                </h2>
-
-                <p>
-                  Si encontraste a Luna,
-                  comunícate con Carlos. La
-                  lectura corresponde a la
-                  etiqueta PET-LUNA-001.
-                </p>
-
-                <a href="tel:+18095550142">
-                  📞 LLAMAR AL 809-555-0142
-                </a>
-
-                <button
-                  type="button"
-                  (click)="registrarHallazgo()">
-                  {{
-                    hallazgoRegistrado
-                      ? '✓ Hallazgo registrado'
-                      : 'Registrar ubicación simulada'
-                  }}
-                </button>
-
-                @if (hallazgoRegistrado) {
-                  <small>
-                    Ubicación: Santiago,
-                    República Dominicana ·
-                    Fecha y hora actuales
-                  </small>
+          @if (nfcReadResult(); as lectura) {
+            <article class="nfc-result">
+              <div class="pet-photo">🐾</div>
+              <div class="grow">
+                <small>{{ lectura.tagId }}</small>
+                @if (nfcSharedPet(); as ficha) {
+                  <h3>{{ ficha.name }}</h3>
+                  <p>{{ ficha.species }}{{ ficha.breed ? ' · ' + ficha.breed : '' }}</p>
+                } @else {
+                  <h3>Etiqueta NFC leída</h3>
+                  <p>{{ lectura.text || 'La etiqueta no contiene una ficha PetCare.' }}</p>
                 }
-              </article>
-            } @else {
-              <article class="nfc-result">
-                <div class="pet-photo">🐕</div>
+              </div>
+              @if (nfcMatchedPet()) {
+                <button type="button" (click)="abrirMascotaLeidaNfc()">Ver ficha</button>
+              }
+            </article>
+          }
 
-                <div class="grow">
-                  <small>
-                    Etiqueta PET-LUNA-001
-                  </small>
-                  <h3>Luna</h3>
-                  <p>
-                    Contacto: Carlos ·
-                    809-555-0142
-                  </p>
-                </div>
+          @if (mensaje) {
+            <div class="success" role="status">{{ mensaje }}</div>
+          }
 
-                <button
-                  type="button"
-                  (click)="seleccionarMascota(petStore.pets()[0])">
-                  Ver ficha
-                </button>
-              </article>
-            }
-          } @else {
-            <p class="helper">
-              La lectura real se activará en la
-              versión Android.
-            </p>
+          @if (!mascotaSeleccionada()) {
+            <p class="helper">Registra una mascota para poder compartir su ficha por NFC.</p>
           }
         </section>
       }
