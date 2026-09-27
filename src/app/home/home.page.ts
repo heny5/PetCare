@@ -17,9 +17,12 @@ import {
 import type {
   PluginListenerHandle
 } from '@capacitor/core';
+
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { IonContent, IonIcon, IonPopover } from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import { personCircleOutline } from 'ionicons/icons';
+
 import { PetService } from '../services/pet.service';
 import { PET_SPECIES, PET_SEXES, PetDraft, StoredPet, isPetDraft } from '../services/pet.model';
 import { CareRecordService } from '../services/care-record.service';
@@ -77,6 +80,9 @@ export class HomePage implements OnInit, OnDestroy {
   readonly sexos = PET_SEXES;
   readonly errorMascota = signal('');
   readonly avisoMascota = signal('');
+  readonly fotosMascota = signal<Record<string, string>>(this.leerFotosMascota());
+  readonly errorFoto = signal('');
+  readonly opcionesFotoAbiertas = signal(false);
   private readonly mascotaId = signal('demo-luna');
   readonly mascotaSeleccionada = computed<StoredPet | undefined>(() =>
     this.petStore.pets().find((pet) => pet.id === this.mascotaId()) ?? this.petStore.pets()[0]
@@ -242,9 +248,72 @@ export class HomePage implements OnInit, OnDestroy {
   seleccionarMascota(pet: StoredPet | undefined): void {
     if (!pet) { this.abrir('mascotas'); return; }
     this.mascotaId.set(pet.id);
+    this.errorFoto.set('');
+    this.opcionesFotoAbiertas.set(false);
     this.nombreMascota = pet.name;
     this.abrir('detalle');
   }
+
+  alternarOpcionesFoto(): void {
+    this.errorFoto.set('');
+    this.opcionesFotoAbiertas.update((abiertas) => !abiertas);
+  }
+
+  agregarFotoGaleria(): Promise<void> {
+    return this.cambiarFoto('galeria');
+  }
+
+  tomarFoto(): Promise<void> {
+    return this.cambiarFoto('camara');
+  }
+
+  private async cambiarFoto(origen: 'galeria' | 'camara'): Promise<void> {
+    const mascota = this.mascotaSeleccionada();
+    if (!mascota) return;
+    this.errorFoto.set('');
+    try {
+      const imagen = origen === 'camara'
+        ? await Camera.takePhoto({
+            quality: 82,
+            targetWidth: 640,
+            targetHeight: 640,
+            encodingType: EncodingType.JPEG,
+            editable: 'in-app',
+            includeMetadata: true,
+          })
+        : (await Camera.chooseFromGallery({
+            mediaType: MediaTypeSelection.Photo,
+            quality: 82,
+            editable: 'in-app',
+            includeMetadata: true,
+          })).results[0];
+      if (!imagen?.thumbnail) throw new Error('No se recibió la imagen.');
+      const formato = imagen.metadata?.format === 'png' ? 'png' : 'jpeg';
+      const foto = `data:image/${formato};base64,${imagen.thumbnail}`;
+      const fotos = { ...this.fotosMascota(), [mascota.id]: foto };
+      localStorage.setItem('petcare.fotos-mascotas', JSON.stringify(fotos));
+      this.fotosMascota.set(fotos);
+      this.opcionesFotoAbiertas.set(false);
+    } catch (error) {
+      const codigo = typeof error === 'object' && error !== null && 'code' in error
+        ? error.code
+        : undefined;
+      if (codigo === CameraErrorCode.TakePhotoCancelled || codigo === CameraErrorCode.ChooseMediaCancelled) return;
+      this.errorFoto.set('No se pudo guardar la foto. Prueba con otra imagen.');
+    }
+  }
+
+  private leerFotosMascota(): Record<string, string> {
+    try {
+      const fotos: unknown = JSON.parse(localStorage.getItem('petcare.fotos-mascotas') ?? '{}');
+      return fotos && typeof fotos === 'object' && !Array.isArray(fotos)
+        ? fotos as Record<string, string>
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
 
   editarMascota(pet: StoredPet): void {
     this.editandoMascotaId = pet.id;
