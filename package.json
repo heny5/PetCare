@@ -24,6 +24,7 @@
     "@angular/router": "22.0.1",
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "8.1.1",
+    "@capacitor/camera": "^8.2.4",
     "@capacitor/core": "8.5.1",
     "@capacitor/geolocation": "^8.2.2",
     "@capacitor/haptics": "8.0.2",
