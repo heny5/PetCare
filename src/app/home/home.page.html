@@ -20,15 +20,28 @@
         </span>
       </button>
 
-      <button
-        class="avatar"
-        type="button"
-        aria-label="Abrir menú de usuario"
-        aria-haspopup="dialog"
-        [attr.aria-expanded]="usuarioMenuAbierto()"
-        (click)="usuarioMenuAbierto.set(true)">
-        <ion-icon name="person-circle-outline" aria-hidden="true"></ion-icon>
-      </button>
+      <div class="topbar-actions">
+        <button
+          class="avatar"
+          type="button"
+          aria-label="Abrir menú de usuario"
+          aria-haspopup="dialog"
+          [attr.aria-expanded]="usuarioMenuAbierto()"
+          (click)="usuarioMenuAbierto.set(true)">
+          <ion-icon name="person-circle-outline" aria-hidden="true"></ion-icon>
+        </button>
+        <span
+          class="network-indicator"
+          [class.offline]="!enLinea"
+          role="status"
+          [attr.aria-label]="enLinea ? 'Conectado a la red. ' + totalPendientes() + ' registros pendientes de sincronización' : 'Sin conexión a internet. ' + totalPendientes() + ' registros pendientes de sincronización'"
+          [attr.title]="enLinea ? 'Conectado a la red · ' + totalPendientes() + ' pendientes de sincronización' : 'Sin conexión · ' + totalPendientes() + ' pendientes de sincronización'">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4.8 15.8a10 10 0 0 1 0-7.6M19.2 8.2a10 10 0 0 1 0 7.6M8.5 14.5a5 5 0 0 1 0-5M15.5 9.5a5 5 0 0 1 0 5M12 12v6m-2.5 0h5" />
+            <circle cx="12" cy="12" r="1.1" />
+          </svg>
+        </span>
+      </div>
     </header>
 
     <ion-popover
@@ -56,30 +69,6 @@
     </section>
   </ng-template>
 </ion-popover>
-
-    <aside
-      class="network-banner"
-      [class.offline]="!enLinea">
-      <div>
-        <b>
-          {{
-            enLinea
-              ? '✓ Conectado a la red'
-              : '⚠ Estás sin conexión a internet'
-          }}
-        </b>
-
-        <small>
-          {{ totalPendientes() }}
-          {{
-            totalPendientes() === 1
-              ? 'registro pendiente'
-              : 'registros pendientes'
-          }}
-          de sincronización
-        </small>
-      </div>
-    </aside>
 
     @switch (vista) {
       @case ('inicio') {
