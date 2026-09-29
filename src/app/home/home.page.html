@@ -1022,21 +1022,12 @@
                       [src]="clip.url"
                       [attr.poster]="clip.poster || null"
                       [attr.aria-label]="'Video de ' + clip.petName"
+                      controls
                       playsinline
-                      preload="metadata"
-                      (timeupdate)="actualizarPosicionVideo(clip.id, selectedVideoPlayer)"
-                      (pause)="videoPausado(clip.id)"
-                      (ended)="playingVideoId.set('')">
+                      preload="auto">
                     </video>
                     <div class="pet-video-controls">
-                      <button type="button" (click)="alternarReproduccionVideo(clip.id, selectedVideoPlayer)" [attr.aria-label]="playingVideoId() === clip.id ? 'Pausar video' : 'Reproducir video'">
-                        {{ playingVideoId() === clip.id ? '❚❚' : '▶' }}
-                      </button>
-                      <ion-range min="0" [max]="selectedVideoPlayer.duration || clip.durationSeconds" [value]="posicionVideo(clip.id)" [attr.aria-label]="'Posición del video de ' + clip.petName" (ionInput)="buscarVideo(selectedVideoPlayer, $event)"></ion-range>
-                      <small>{{ formatearTiempoVideo(posicionVideo(clip.id)) }} / {{ formatearTiempoVideo(selectedVideoPlayer.duration || clip.durationSeconds) }}</small>
                       <button type="button" (click)="cambiarVelocidadVideo(selectedVideoPlayer)" [attr.aria-label]="'Velocidad ' + selectedVideoPlayer.playbackRate">{{ selectedVideoPlayer.playbackRate }}×</button>
-                      <button type="button" (click)="alternarSilencioVideo(selectedVideoPlayer)" [attr.aria-label]="selectedVideoPlayer.muted ? 'Activar sonido' : 'Silenciar'">{{ selectedVideoPlayer.muted ? '🔇' : '🔊' }}</button>
-                      <ion-range class="video-volume" min="0" max="1" step="0.05" [value]="selectedVideoPlayer.muted ? 0 : selectedVideoPlayer.volume" [attr.aria-label]="'Volumen del video de ' + clip.petName" (ionInput)="ajustarVolumenVideo(selectedVideoPlayer, $event)"></ion-range>
                       <button type="button" (click)="expandirVideo(selectedVideoPlayer)" aria-label="Pantalla completa">⛶</button>
                     </div>
                   </div>

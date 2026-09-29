@@ -7,8 +7,7 @@ import {
   OnInit,
   Input,
   ElementRef,
-  QueryList,
-  ViewChildren,
+  ViewChild,
   computed,
   effect,
   inject,
@@ -100,7 +99,6 @@ interface HistorialEvent {
     IonIcon,
     IonInput,
     IonPopover,
-    IonRange,
     IonRefresher,
     IonRefresherContent,
     IonSelect,
@@ -128,6 +126,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   readonly selectedVideo = computed(() =>
     this.petMedia.clips().find((clip) => clip.id === this.selectedVideoId())
   );
+  @ViewChild('selectedVideoPlayer') private selectedVideoRef?: ElementRef<HTMLVideoElement>;
   readonly activityTypes = CARE_ACTIVITY_TYPES;
   readonly historialMascotaId = signal('');
   readonly mascotaHistorialSeleccionada = computed(() =>
@@ -249,9 +248,6 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   videoCaption = '';
   readonly videoMessage = signal('');
   readonly savingVideo = signal(false);
-  readonly playingVideoId = signal('');
-  readonly videoPositions = signal<Record<string, number>>({});
-  @ViewChildren('petVideoPlayer') private petVideoPlayers?: QueryList<ElementRef<HTMLVideoElement>>;
 
   alertas: AlertaCollar[] = [
     {
@@ -353,6 +349,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   async ngOnDestroy(): Promise<void> {
     this.destroyed = true;
+    this.selectedVideoRef?.nativeElement.pause();
     await this.networkListener?.remove();
   }
 
@@ -800,7 +797,6 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   abrirReproductorVideo(clip: PetVideoClip): void {
     this.selectedVideoId.set(clip.id);
-    this.videoPositions.update((positions) => ({ ...positions, [clip.id]: 0 }));
   }
 
   abrirAlbumVideos(): void {
@@ -810,58 +806,13 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   volverAlbumVideos(player: HTMLVideoElement): void {
     player.pause();
-    this.playingVideoId.set('');
     this.selectedVideoId.set('');
   }
 
   cerrarAlbumVideos(): void {
-    this.petVideoPlayers?.forEach((reference) => reference.nativeElement.pause());
-    this.playingVideoId.set('');
+    this.selectedVideoRef?.nativeElement.pause();
     this.selectedVideoId.set('');
     this.videoAlbumOpen.set(false);
-  }
-
-  async alternarReproduccionVideo(id: string, player: HTMLVideoElement): Promise<void> {
-    if (!player.paused && this.playingVideoId() === id) {
-      player.pause();
-      this.playingVideoId.set('');
-      return;
-    }
-    this.petVideoPlayers?.forEach((reference) => {
-      if (reference.nativeElement !== player) reference.nativeElement.pause();
-    });
-    this.playingVideoId.set(id);
-    try {
-      await player.play();
-    } catch {
-      this.playingVideoId.set('');
-      this.videoMessage.set('El dispositivo no pudo reproducir este formato de video.');
-    }
-  }
-
-  actualizarPosicionVideo(id: string, player: HTMLVideoElement): void {
-    this.videoPositions.update((positions) => ({ ...positions, [id]: player.currentTime }));
-    if (player.paused) this.videoPausado(id);
-  }
-
-  videoPausado(id: string): void {
-    if (this.playingVideoId() === id) this.playingVideoId.set('');
-  }
-
-  buscarVideo(player: HTMLVideoElement, event: CustomEvent<{ value: unknown }>): void {
-    const rawValue = event.detail.value;
-    const value = Number(Array.isArray(rawValue) ? rawValue[0] : rawValue);
-    if (Number.isFinite(value)) player.currentTime = value;
-  }
-
-  ajustarVolumenVideo(player: HTMLVideoElement, event: CustomEvent<{ value: unknown }>): void {
-    const rawValue = event.detail.value;
-    player.volume = Number(Array.isArray(rawValue) ? rawValue[0] : rawValue);
-    player.muted = false;
-  }
-
-  alternarSilencioVideo(player: HTMLVideoElement): void {
-    player.muted = !player.muted;
   }
 
   cambiarVelocidadVideo(player: HTMLVideoElement): void {
@@ -884,10 +835,6 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
     const wholeSeconds = Math.floor(seconds);
     return `${Math.floor(wholeSeconds / 60)}:${String(wholeSeconds % 60).padStart(2, '0')}`;
-  }
-
-  posicionVideo(id: string): number {
-    return this.videoPositions()[id] || 0;
   }
 
   private async duracionVideo(blob: Blob): Promise<number> {
