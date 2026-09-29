@@ -61,7 +61,7 @@ export class DatabaseService {
   async listPets(userId: number): Promise<StoredPet[]> {
     const database = await this.getDatabase();
     const result = await database.query(
-      'SELECT id, name, species, breed, sex, age_years, weight_kg, created_at FROM pets WHERE user_id = ? ORDER BY id',
+      'SELECT id, name, species, breed, sex, age_years, weight_kg, date_of_birth, important_notes, created_at FROM pets WHERE user_id = ? ORDER BY id',
       [userId],
     );
     return (result.values ?? []).map((row) => ({
@@ -72,6 +72,8 @@ export class DatabaseService {
       sex: row['sex'] as PetDraft['sex'],
       ageYears: row['age_years'] === null ? null : Number(row['age_years']),
       weightKg: row['weight_kg'] === null ? null : Number(row['weight_kg']),
+      dateOfBirth: row['date_of_birth'] ? String(row['date_of_birth']) : null,
+      importantNotes: String(row['important_notes'] ?? ''),
       createdAt: String(row['created_at']),
       pending: false,
     }));
@@ -81,8 +83,9 @@ export class DatabaseService {
     const database = await this.getDatabase();
     const now = new Date().toISOString();
     const result = await database.run(
-      'INSERT INTO pets (user_id, name, species, breed, sex, age_years, weight_kg, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [userId, draft.name.trim(), draft.species, draft.breed.trim(), draft.sex, draft.ageYears, draft.weightKg, now, now],
+      'INSERT INTO pets (user_id, name, species, breed, sex, age_years, weight_kg, date_of_birth, important_notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, draft.name.trim(), draft.species, draft.breed.trim(), draft.sex, draft.ageYears, draft.weightKg,
+        draft.dateOfBirth || null, draft.importantNotes?.trim() ?? '', now, now],
     );
     await this.saveWebDatabase();
     const id = result.changes?.lastId;
@@ -93,8 +96,9 @@ export class DatabaseService {
   async updatePet(userId: number, id: string, draft: PetDraft): Promise<void> {
     const database = await this.getDatabase();
     const result = await database.run(
-      'UPDATE pets SET name = ?, species = ?, breed = ?, sex = ?, age_years = ?, weight_kg = ?, updated_at = ? WHERE id = ? AND user_id = ?',
-      [draft.name.trim(), draft.species, draft.breed.trim(), draft.sex, draft.ageYears, draft.weightKg, new Date().toISOString(), Number(id), userId],
+      'UPDATE pets SET name = ?, species = ?, breed = ?, sex = ?, age_years = ?, weight_kg = ?, date_of_birth = ?, important_notes = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+      [draft.name.trim(), draft.species, draft.breed.trim(), draft.sex, draft.ageYears, draft.weightKg,
+        draft.dateOfBirth || null, draft.importantNotes?.trim() ?? '', new Date().toISOString(), Number(id), userId],
     );
     if (result.changes?.changes !== 1) throw new Error('La mascota no existe para este usuario.');
     await this.saveWebDatabase();
@@ -112,7 +116,8 @@ export class DatabaseService {
     const result = await database.query(
       `SELECT plan.id, plan.pet_id, pets.name AS pet_name, plan.type, plan.title,
         plan.details, plan.due_at, plan.weight_kg, plan.temperature_c,
-        plan.completed_at, plan.created_at
+        plan.quantity, plan.repeat_every_days, plan.dose_number, plan.next_dose_at,
+        plan.generated_from_id, plan.reminder_enabled, plan.completed_at, plan.created_at
        FROM care_plans AS plan
        INNER JOIN pets ON pets.id = plan.pet_id AND pets.user_id = plan.user_id
        WHERE plan.user_id = ?
@@ -129,6 +134,12 @@ export class DatabaseService {
       dueAt: String(row['due_at']),
       weightKg: row['weight_kg'] === null ? null : Number(row['weight_kg']),
       temperatureC: row['temperature_c'] === null ? null : Number(row['temperature_c']),
+      quantity: String(row['quantity'] ?? ''),
+      repeatEveryDays: row['repeat_every_days'] === null ? null : Number(row['repeat_every_days']),
+      doseNumber: row['dose_number'] === null ? null : Number(row['dose_number']),
+      nextDoseAt: row['next_dose_at'] ? String(row['next_dose_at']) : null,
+      generatedFromId: row['generated_from_id'] ? String(row['generated_from_id']) : null,
+      reminderEnabled: Number(row['reminder_enabled'] ?? 1) === 1,
       status: row['completed_at'] === null ? 'pending' : 'completed',
         completedAt: row['completed_at'] === null ? null : String(row['completed_at']),
       createdAt: String(row['created_at']),
@@ -146,11 +157,24 @@ export class DatabaseService {
     const completedAt = draft.type === 'Control de salud' ? createdAt : null;
     await database.run(
       `INSERT INTO care_plans
-        (id, user_id, pet_id, type, title, details, due_at, weight_kg, temperature_c, completed_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, user_id, pet_id, type, title, details, due_at, weight_kg, temperature_c,
+         quantity, repeat_every_days, dose_number, next_dose_at, generated_from_id, reminder_enabled, completed_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [draft.id, userId, Number(draft.petId), draft.type, draft.title.trim(), draft.details.trim(), draft.dueAt,
-        draft.weightKg, draft.temperatureC, completedAt, createdAt],
+        draft.weightKg, draft.temperatureC, draft.quantity?.trim() ?? '', draft.repeatEveryDays ?? null,
+        draft.doseNumber ?? null, draft.nextDoseAt ?? null, draft.generatedFromId ?? null,
+        draft.reminderEnabled === false ? 0 : 1, completedAt, createdAt],
     );
+    await this.saveWebDatabase();
+  }
+
+  async setCarePlanReminderEnabled(userId: number, id: string, enabled: boolean): Promise<void> {
+    const database = await this.getDatabase();
+    const result = await database.run(
+      'UPDATE care_plans SET reminder_enabled = ? WHERE id = ? AND user_id = ? AND completed_at IS NULL',
+      [enabled ? 1 : 0, id, userId],
+    );
+    if (result.changes?.changes !== 1) throw new Error('El recordatorio ya no existe o ya fue realizado.');
     await this.saveWebDatabase();
   }
 
@@ -161,6 +185,12 @@ export class DatabaseService {
       [completed ? new Date().toISOString() : null, id, userId],
     );
     if (result.changes?.changes !== 1) throw new Error('El recordatorio ya no existe.');
+    if (!completed) {
+      await database.run(
+        'DELETE FROM care_plans WHERE user_id = ? AND generated_from_id = ? AND completed_at IS NULL',
+        [userId, id],
+      );
+    }
     await this.saveWebDatabase();
   }
 
@@ -237,6 +267,8 @@ export class DatabaseService {
         sex TEXT,
         age_years INTEGER,
         weight_kg REAL,
+        date_of_birth TEXT,
+        important_notes TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -252,6 +284,12 @@ export class DatabaseService {
         due_at TEXT NOT NULL,
         weight_kg REAL,
         temperature_c REAL,
+        quantity TEXT NOT NULL DEFAULT '',
+        repeat_every_days INTEGER,
+        dose_number INTEGER,
+        next_dose_at TEXT,
+        generated_from_id TEXT,
+        reminder_enabled INTEGER NOT NULL DEFAULT 1,
         completed_at TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -259,6 +297,20 @@ export class DatabaseService {
       );
       CREATE INDEX IF NOT EXISTS idx_care_plans_user_due ON care_plans(user_id, due_at);
     `);
+    await this.ensureColumn('pets', 'date_of_birth', 'TEXT');
+    await this.ensureColumn('pets', 'important_notes', "TEXT NOT NULL DEFAULT ''");
+    await this.ensureColumn('care_plans', 'quantity', "TEXT NOT NULL DEFAULT ''");
+    await this.ensureColumn('care_plans', 'repeat_every_days', 'INTEGER');
+    await this.ensureColumn('care_plans', 'dose_number', 'INTEGER');
+    await this.ensureColumn('care_plans', 'next_dose_at', 'TEXT');
+    await this.ensureColumn('care_plans', 'generated_from_id', 'TEXT');
+    await this.ensureColumn('care_plans', 'reminder_enabled', 'INTEGER NOT NULL DEFAULT 1');
+  }
+
+  private async ensureColumn(table: string, column: string, definition: string): Promise<void> {
+    const result = await this.database!.query(`PRAGMA table_info(${table})`);
+    if ((result.values ?? []).some((row) => String(row['name']) === column)) return;
+    await this.database!.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`);
   }
 
   private async waitForWebStore(element: HTMLElement & { isStoreOpen: () => Promise<boolean> }): Promise<void> {

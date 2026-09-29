@@ -1,8 +1,12 @@
 export const CARE_PLAN_TYPES = [
   'Cita veterinaria',
+  'Alimentación',
   'Vacuna',
   'Desparasitación',
   'Medicamento',
+  'Peluquería',
+  'Paseo',
+  'Otro',
   'Control de salud',
 ] as const;
 
@@ -17,6 +21,12 @@ export interface CarePlanDraft {
   dueAt: string;
   weightKg: number | null;
   temperatureC: number | null;
+  quantity?: string;
+  repeatEveryDays?: number | null;
+  doseNumber?: number | null;
+  nextDoseAt?: string | null;
+  generatedFromId?: string | null;
+  reminderEnabled?: boolean;
 }
 
 export interface CarePlanEntry extends CarePlanDraft {

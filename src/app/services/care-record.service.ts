@@ -10,6 +10,7 @@ export const CARE_ACTIVITY_TYPES = [
   'Desparasitación',
   'Cita veterinaria',
   'Higiene y cuidado',
+  'Peluquería',
   'Otro',
 ] as const;
 

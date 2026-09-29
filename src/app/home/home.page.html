@@ -203,7 +203,7 @@
               <div class="grow">
                 <small>Mascota principal</small>
                 <h3>{{ mascota.name }}</h3>
-                <p>{{ mascota.breed || mascota.species }} · {{ edadMascota(mascota.ageYears) }}</p>
+                <p>{{ mascota.breed || mascota.species }} · {{ edadMascota(mascota.ageYears, mascota.dateOfBirth) }}</p>
               </div>
               <span class="status"><i></i>{{ mascota.pending ? 'Pendiente de sincronización' : 'Registrada' }}</span>
             </article>
@@ -347,7 +347,7 @@
               </span>
               <span class="grow">
                 <span class="pet-name">{{ mascota.name }}</span>
-                <span class="pet-description">{{ mascota.breed || mascota.species }} · {{ mascota.sex }} · {{ edadMascota(mascota.ageYears) }}</span>
+                <span class="pet-description">{{ mascota.breed || mascota.species }} · {{ mascota.sex }} · {{ edadMascota(mascota.ageYears, mascota.dateOfBirth) }}</span>
                 <span class="tag" [class.neutral]="mascota.pending">
                   {{ mascota.pending ? 'Pendiente de sincronización' : 'Mascota registrada' }}
                 </span>
@@ -391,12 +391,11 @@
             </ion-select>
             <div class="pet-form-columns">
               <div>
-                <ion-input id="pet-age" name="ageYears" type="number" min="0" max="200" step="1"
-                  label="Edad en años (opcional)" labelPlacement="stacked" fill="outline"
-                  [ngModel]="nuevaMascota.ageYears" (ngModelChange)="nuevaMascota.ageYears = numeroOpcional($event)" placeholder="Ej.: 2" #petAge="ngModel">
+                <ion-input id="pet-birth-date" name="dateOfBirth" type="date" [max]="fechaMaximaNacimiento"
+                  label="Fecha de nacimiento (opcional)" labelPlacement="stacked" fill="outline"
+                  [ngModel]="nuevaMascota.dateOfBirth ?? ''" (ngModelChange)="actualizarFechaNacimiento($event)">
                 </ion-input>
-                <small>Usa 0 si tiene menos de un año.</small>
-                @if (petForm.submitted && petAge.invalid) { <small class="field-error">Indica una edad entre 0 y 200.</small> }
+                <small>La edad se calcula a partir de esta fecha.</small>
               </div>
               <div>
                 <ion-input id="pet-weight" name="weightKg" type="number" min="0.001" step="any"
@@ -406,6 +405,9 @@
                 @if (petForm.submitted && petWeight.invalid) { <small class="field-error">El peso debe ser mayor que cero.</small> }
               </div>
             </div>
+            <ion-textarea id="pet-important-notes" name="importantNotes" label="Datos importantes (opcional)" labelPlacement="stacked" fill="outline"
+              [(ngModel)]="nuevaMascota.importantNotes" maxlength="1000" autoGrow="true"
+              placeholder="Alergias, condiciones médicas u otra información útil"></ion-textarea>
             @if (!enLinea) { <p class="pet-sync-status">Puedes guardarla sin conexión. Se sincronizará cuando vuelvas a estar en línea.</p> }
             @if (errorMascota()) { <p class="success sync-error" role="alert">{{ errorMascota() }}</p> }
             <div class="pet-form-actions">
@@ -445,7 +447,7 @@
               <p class="photo-error" role="alert">{{ errorFoto() }}</p>
             }
             <h1>{{ mascota.name }}</h1>
-            <p>{{ mascota.breed || mascota.species }} · {{ edadMascota(mascota.ageYears) }} @if (mascota.weightKg !== null) { · {{ mascota.weightKg }} kg }</p>
+            <p>{{ mascota.breed || mascota.species }} · {{ edadMascota(mascota.ageYears, mascota.dateOfBirth) }} @if (mascota.weightKg !== null) { · {{ mascota.weightKg }} kg }</p>
             <span class="status white" [class.lost-status]="mascotaPerdida"><i></i>{{ mascotaPerdida ? 'Reportada como perdida' : mascota.pending ? 'Guardada en este dispositivo' : 'Perfil registrado' }}</span>
           </div>
           <article class="lost-panel" [class.active]="mascotaPerdida">
@@ -478,7 +480,9 @@
           <h2 class="subheading">Información de {{ mascota.name }}</h2>
           <div class="info-list">
             <div><span aria-hidden="true">🐾</span><p><b>Especie y raza</b><small>{{ mascota.species }} · {{ mascota.breed || 'Raza sin especificar' }}</small></p></div>
-            <div><span aria-hidden="true">📋</span><p><b>Sexo y edad</b><small>{{ mascota.sex }} · {{ edadMascota(mascota.ageYears) }}</small></p></div>
+            <div><span aria-hidden="true">📋</span><p><b>Sexo y edad</b><small>{{ mascota.sex }} · {{ edadMascota(mascota.ageYears, mascota.dateOfBirth) }}</small></p></div>
+            @if (mascota.dateOfBirth) { <div><span aria-hidden="true">🎂</span><p><b>Fecha de nacimiento</b><small>{{ formatearFechaNacimiento(mascota.dateOfBirth) }}</small></p></div> }
+            @if (mascota.importantNotes) { <div><span aria-hidden="true">📝</span><p><b>Datos importantes</b><small>{{ mascota.importantNotes }}</small></p></div> }
             <div><span aria-hidden="true">⚖️</span><p><b>Peso</b><small>@if (ultimoControl(mascota.id); as control) { {{ control.weightKg === null ? (mascota.weightKg === null ? 'Sin registrar' : mascota.weightKg + ' kg') : control.weightKg + ' kg' }} } @else { {{ mascota.weightKg === null ? 'Sin registrar' : mascota.weightKg + ' kg' }} }</small></p></div>
             @if (ultimoControl(mascota.id); as control) {
               @if (control.temperatureC !== null) { <div><span aria-hidden="true">🌡️</span><p><b>Última temperatura</b><small>{{ control.temperatureC }} °C · {{ control.dueAt | date: 'd MMM y' }}</small></p></div> }
@@ -770,6 +774,18 @@
                 <div><small>PLAN PERSONAL</small><h2>Programar cuidado</h2></div>
               </div>
 
+              @if (carePlan.notificationsEnabled()) {
+                <p class="notification-setting notification-enabled" role="status">🔔 Avisos activados en este dispositivo.</p>
+              } @else if (!carePlan.notificationsSupported()) {
+                <p class="notification-setting">Este navegador no admite avisos locales. La agenda de la app seguirá mostrando tus pendientes.</p>
+              } @else {
+                <button class="notification-setting notification-enable" type="button" (click)="carePlan.enableNotifications()" [disabled]="carePlan.requestingNotifications()">
+                  {{ carePlan.requestingNotifications() ? 'Solicitando permiso…' : 'Activar avisos en este dispositivo' }}
+                </button>
+                <small class="care-local-note">En Android, los avisos pueden llegar aunque PetCare esté cerrada.</small>
+              }
+              @if (carePlan.notificationError()) { <p class="care-feedback care-feedback-error" role="alert">{{ carePlan.notificationError() }}</p> }
+
               <ion-select id="care-plan-pet" name="carePlanPetId" label="Mascota" labelPlacement="stacked" fill="outline" interface="popover" [(ngModel)]="carePlanPetId" required>
                 @for (pet of petStore.pets(); track pet.id) {
                   <ion-select-option [value]="pet.id">{{ pet.name }} · {{ pet.species }}</ion-select-option>
@@ -781,13 +797,33 @@
               </ion-select>
 
               @if (carePlanType !== 'Control de salud') {
-                <ion-input id="care-plan-title" name="carePlanTitle" type="text" label="Nombre o motivo" labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanTitle" required maxlength="100"
-                  [placeholder]="carePlanType === 'Medicamento' ? 'Ej.: Antiparasitario' : carePlanType === 'Cita veterinaria' ? 'Ej.: Revisión anual' : carePlanType">
+                <ion-input id="care-plan-title" name="carePlanTitle" type="text"
+                  [label]="carePlanType === 'Alimentación' ? 'Comida o alimento' : carePlanType === 'Peluquería' ? 'Servicio' : carePlanType === 'Paseo' ? 'Actividad' : 'Nombre o motivo'"
+                  labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanTitle" required maxlength="100"
+                  [placeholder]="carePlanType === 'Alimentación' ? 'Ej.: Desayuno, croquetas' : carePlanType === 'Medicamento' ? 'Ej.: Antiparasitario' : carePlanType === 'Cita veterinaria' ? 'Ej.: Revisión anual' : carePlanType">
                 </ion-input>
               }
 
-              <ion-input id="care-plan-date" name="carePlanDueAt" type="datetime-local" [label]="carePlanType === 'Control de salud' ? 'Fecha del control' : 'Fecha y hora del recordatorio'" labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanDueAt" required>
+              <ion-input id="care-plan-date" name="carePlanDueAt" type="datetime-local" [label]="carePlanType === 'Control de salud' ? 'Fecha del control' : carePlanType === 'Cita veterinaria' ? 'Fecha y hora de la cita' : 'Fecha y hora del aviso'" labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanDueAt" required>
               </ion-input>
+
+              @if (carePlanType === 'Alimentación') {
+                <ion-input id="care-plan-quantity" name="carePlanQuantity" type="text" label="Cantidad de alimento" labelPlacement="stacked" fill="outline"
+                  [(ngModel)]="carePlanQuantity" required maxlength="80" placeholder="Ej.: 100 g o 1 taza"></ion-input>
+                <small class="care-local-note">Programa un aviso por cada comida y hora; repítelo a diario para mantener el horario.</small>
+              }
+
+              @if (carePlanType === 'Vacuna') {
+                <ion-input id="care-plan-dose" name="carePlanDoseNumber" type="number" min="1" max="20" step="1" label="Número de dosis" labelPlacement="stacked" fill="outline"
+                  [ngModel]="carePlanDoseNumber" (ngModelChange)="carePlanDoseNumber = numeroOpcionalEntero($event)" required></ion-input>
+                <ion-input id="care-plan-next-dose" name="carePlanNextDoseAt" type="datetime-local" label="Fecha y hora de la próxima dosis (opcional)" labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanNextDoseAt"></ion-input>
+                <small class="care-local-note">Al marcar esta dosis como realizada, la próxima se añadirá automáticamente a la agenda.</small>
+              }
+
+              @if (carePlanType !== 'Vacuna' && carePlanType !== 'Control de salud') {
+                <ion-input id="care-plan-repeat" name="carePlanRepeatEveryDays" type="number" min="1" max="365" step="1" label="Repetir cada (días, opcional)" labelPlacement="stacked" fill="outline"
+                  [ngModel]="carePlanRepeatEveryDays" (ngModelChange)="carePlanRepeatEveryDays = numeroOpcionalEntero($event)" placeholder="Ej.: 1 para diario"></ion-input>
+              }
 
               @if (carePlanType === 'Control de salud') {
                 <div class="care-input-columns">
@@ -800,8 +836,8 @@
                 </div>
               }
 
-              <ion-textarea id="care-plan-details" name="carePlanDetails" [label]="(carePlanType === 'Medicamento' ? 'Dosis y frecuencia' : carePlanType === 'Cita veterinaria' ? 'Veterinaria o notas' : 'Notas') + ' (opcional)'" labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanDetails" maxlength="500" autoGrow="true"
-                [placeholder]="carePlanType === 'Medicamento' ? 'Ej.: 1 tableta con la comida, cada 24 horas' : carePlanType === 'Cita veterinaria' ? 'Ej.: Clínica y motivo de consulta' : 'Agrega un detalle útil para recordar'"></ion-textarea>
+              <ion-textarea id="care-plan-details" name="carePlanDetails" [label]="(carePlanType === 'Medicamento' ? 'Dosis y frecuencia' : carePlanType === 'Cita veterinaria' ? 'Veterinaria o motivo' : carePlanType === 'Alimentación' ? 'Indicaciones especiales' : 'Notas') + ' (opcional)'" labelPlacement="stacked" fill="outline" [(ngModel)]="carePlanDetails" maxlength="500" autoGrow="true"
+                [placeholder]="carePlanType === 'Medicamento' ? 'Ej.: 1 tableta con la comida, cada 24 horas' : carePlanType === 'Cita veterinaria' ? 'Ej.: Clínica, veterinario y motivo de consulta' : carePlanType === 'Alimentación' ? 'Ej.: Dieta especial, servir con agua' : 'Agrega un detalle útil para recordar'"></ion-textarea>
 
               @if (carePlanMessage()) { <p class="care-feedback" role="status">{{ carePlanMessage() }}</p> }
               @if (carePlan.loadError()) { <p class="care-feedback care-feedback-error" role="alert">No se pudieron leer los cuidados guardados. <button type="button" (click)="carePlan.reload()">Reintentar</button></p> }
@@ -820,18 +856,30 @@
               @if (carePlan.isLoading()) {
                 <p class="care-empty-list" role="status">Cargando cuidados guardados…</p>
               } @else if (carePlan.pendingEntries().length === 0) {
-                <p class="care-empty-list">No hay cuidados pendientes. Programa una cita, vacuna o medicamento arriba.</p>
+                <p class="care-empty-list">No hay cuidados pendientes. Programa comidas, vacunas, citas, paseos u otros avisos arriba.</p>
               } @else {
                 @for (entry of carePlan.pendingEntries(); track entry.id) {
                   <article class="care-plan-card">
                     <div class="care-plan-card-top">
-                      <span class="care-plan-icon" aria-hidden="true">{{ entry.type === 'Cita veterinaria' ? '🩺' : entry.type === 'Vacuna' ? '💉' : entry.type === 'Desparasitación' ? '🛡️' : entry.type === 'Medicamento' ? '💊' : '📈' }}</span>
+                      <span class="care-plan-icon" aria-hidden="true">{{ entry.type === 'Cita veterinaria' ? '🩺' : entry.type === 'Alimentación' ? '🍽️' : entry.type === 'Vacuna' ? '💉' : entry.type === 'Desparasitación' ? '🛡️' : entry.type === 'Medicamento' ? '💊' : entry.type === 'Peluquería' ? '✂️' : entry.type === 'Paseo' ? '🐾' : entry.type === 'Control de salud' ? '📈' : '📌' }}</span>
                       <span class="care-plan-date" [class.care-plan-overdue]="recordatorioLabel(entry) === 'Vencido'">{{ recordatorioLabel(entry) }}</span>
                     </div>
                     <h3>{{ entry.title }}</h3>
                     <p class="care-plan-pet">{{ entry.petName }} · {{ entry.type }}</p>
                     <p class="care-plan-datetime">{{ entry.dueAt | date: 'd MMM y, h:mm a' }}</p>
+                    @if (entry.quantity) { <p class="care-plan-details">Cantidad: {{ entry.quantity }}</p> }
+                    @if (entry.doseNumber !== undefined && entry.doseNumber !== null) { <p class="care-plan-details">Dosis {{ entry.doseNumber }}</p> }
+                    @if (entry.repeatEveryDays) { <p class="care-plan-details">Se repite cada {{ entry.repeatEveryDays }} día(s); al marcarla realizada se programa la siguiente.</p> }
+                    @if (entry.nextDoseAt) { <p class="care-plan-details">Próxima dosis: {{ entry.nextDoseAt | date: 'd MMM y, h:mm a' }}</p> }
                     @if (entry.details) { <p class="care-plan-details">{{ entry.details }}</p> }
+                    <div class="care-reminder-toggle">
+                      <span>{{ entry.reminderEnabled === false ? 'Aviso desactivado' : 'Aviso activado' }}</span>
+                      <ion-toggle
+                        [checked]="entry.reminderEnabled !== false"
+                        [attr.aria-label]="(entry.reminderEnabled === false ? 'Activar aviso para ' : 'Desactivar aviso para ') + entry.title"
+                        (ionChange)="cambiarAvisoPlanCuidado(entry, $event.detail.checked)">
+                      </ion-toggle>
+                    </div>
                     <div class="care-plan-actions">
                       <button type="button" (click)="completarPlanCuidado(entry)">Marcar realizado</button>
                       <button type="button" class="care-plan-delete" (click)="eliminarPlanCuidado(entry)">Eliminar</button>
@@ -849,7 +897,9 @@
                     <div class="care-plan-card-top"><span class="care-plan-icon" aria-hidden="true">✓</span><span class="care-plan-date">Realizado</span></div>
                     <h3>{{ entry.title }}</h3>
                     <p class="care-plan-pet">{{ entry.petName }} · {{ entry.type }}</p>
-                    <p class="care-plan-datetime">{{ entry.dueAt | date: 'd MMM y, h:mm a' }}</p>
+                    <p class="care-plan-datetime">Realizado: {{ (entry.completedAt || entry.dueAt) | date: 'd MMM y, h:mm a' }}</p>
+                    @if (entry.doseNumber !== undefined && entry.doseNumber !== null) { <p class="care-plan-details">Dosis {{ entry.doseNumber }} realizada</p> }
+                    @if (entry.nextDoseAt) { <p class="care-plan-details">Próxima dosis programada: {{ entry.nextDoseAt | date: 'd MMM y, h:mm a' }}</p> }
                     @if (entry.weightKg !== null || entry.temperatureC !== null) {
                       <p class="care-plan-details">@if (entry.weightKg !== null) { Peso: {{ entry.weightKg }} kg } @if (entry.temperatureC !== null) { · Temperatura: {{ entry.temperatureC }} °C }</p>
                     }

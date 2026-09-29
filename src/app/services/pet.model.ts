@@ -8,6 +8,8 @@ export interface PetDraft {
   sex: typeof PET_SEXES[number];
   ageYears: number | null;
   weightKg: number | null;
+  dateOfBirth?: string | null;
+  importantNotes?: string;
 }
 export interface Pet extends PetDraft { id: string; createdAt: string; }
 export interface StoredPet extends Pet { pending: boolean; deleted?: boolean; operation?: 'PUT'; }
@@ -19,8 +21,18 @@ export function isPetDraft(value: unknown): value is PetDraft {
     PET_SPECIES.includes(pet.species) && PET_SEXES.includes(pet.sex) &&
     typeof pet.breed === 'string' && pet.breed.length <= 80 &&
     (pet.ageYears === null || (Number.isInteger(pet.ageYears) && pet.ageYears >= 0 && pet.ageYears <= 200)) &&
-    (pet.weightKg === null || (typeof pet.weightKg === 'number' && Number.isFinite(pet.weightKg) && pet.weightKg > 0));
+    (pet.weightKg === null || (typeof pet.weightKg === 'number' && Number.isFinite(pet.weightKg) && pet.weightKg > 0)) &&
+    (pet.dateOfBirth === undefined || pet.dateOfBirth === null || pet.dateOfBirth === '' || isValidDateOfBirth(pet.dateOfBirth)) &&
+    (pet.importantNotes === undefined || (typeof pet.importantNotes === 'string' && pet.importantNotes.length <= 1000));
 }
+
+function isValidDateOfBirth(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value &&
+    value <= new Date().toISOString().slice(0, 10);
+}
+
 export function isPet(value: unknown): value is Pet {
   if (!isPetDraft(value)) return false;
   const pet = value as Pet;

@@ -37,6 +37,7 @@ import {
   IonSelect,
   IonSelectOption,
   IonTextarea,
+  IonToggle,
   RefresherCustomEvent,
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
@@ -104,6 +105,7 @@ interface HistorialEvent {
     IonSelect,
     IonSelectOption,
     IonTextarea,
+    IonToggle,
     RouterLink
   ],
 })
@@ -164,7 +166,15 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       ].filter(Boolean);
       events.set(`plan:${entry.id}`, {
         id: `plan:${entry.id}`, category: entry.type, title: entry.title,
-        details: [entry.details, ...measurements].filter(Boolean).join(' · '),
+        details: [
+          entry.quantity ? `Cantidad: ${entry.quantity}` : '',
+          entry.doseNumber ? `Dosis ${entry.doseNumber}` : '',
+          entry.nextDoseAt
+            ? `Próxima dosis: ${new Intl.DateTimeFormat('es-DO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(entry.nextDoseAt))}`
+            : '',
+          entry.details,
+          ...measurements,
+        ].filter(Boolean).join(' · '),
         occurredAt: entry.completedAt ?? entry.dueAt, pendingSync: false,
       });
     }
@@ -237,6 +247,11 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   carePlanTitle = '';
   carePlanDetails = '';
   carePlanDueAt = this.fechaLocalInput(24 * 60 * 60 * 1000);
+  carePlanQuantity = '';
+  carePlanRepeatEveryDays: number | null = null;
+  carePlanDoseNumber: number | null = 1;
+  carePlanNextDoseAt = '';
+  readonly fechaMaximaNacimiento = this.fechaLocalInput(0).slice(0, 10);
   carePlanWeight: number | null = null;
   carePlanTemperature: number | null = null;
   readonly carePlanMessage = signal('');
@@ -532,6 +547,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.nuevaMascota = {
       name: pet.name, species: pet.species, breed: pet.breed,
       sex: pet.sex, ageYears: pet.ageYears, weightKg: pet.weightKg,
+      dateOfBirth: pet.dateOfBirth ?? null, importantNotes: pet.importantNotes ?? '',
     };
     this.errorMascota.set('');
     this.avisoMascota.set('');
@@ -549,6 +565,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     if (!pet) return;
     try {
       await this.petStore.remove(pet.id);
+      await this.carePlan.reload();
       this.avisoMascota.set(`${pet.name} se eliminó de tus mascotas.`);
       this.abrir('mascotas');
       this.changeDetector.detectChanges();
@@ -570,14 +587,40 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     return ({ Perro: '🐕', Gato: '🐈', Ave: '🐦', Conejo: '🐇' } as Record<string, string>)[species] ?? '🐾';
   }
 
-  edadMascota(age: number | null): string {
+  edadMascota(age: number | null, dateOfBirth?: string | null): string {
+    if (dateOfBirth) age = this.edadDesdeFecha(dateOfBirth);
     if (age === null) return 'Edad sin especificar';
     if (age === 0) return 'Menos de 1 año';
     return `${age} ${age === 1 ? 'año' : 'años'}`;
   }
 
   private formularioMascotaVacio(): PetDraft {
-    return { name: '', species: 'Perro', breed: '', sex: 'Sin especificar', ageYears: null, weightKg: null };
+    return {
+      name: '', species: 'Perro', breed: '', sex: 'Sin especificar', ageYears: null, weightKg: null,
+      dateOfBirth: null, importantNotes: '',
+    };
+  }
+
+  actualizarFechaNacimiento(value: string | null | undefined): void {
+    const dateOfBirth = value || null;
+    this.nuevaMascota.dateOfBirth = dateOfBirth;
+    this.nuevaMascota.ageYears = dateOfBirth ? this.edadDesdeFecha(dateOfBirth) : null;
+  }
+
+  formatearFechaNacimiento(value: string): string {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Intl.DateTimeFormat('es-DO', { dateStyle: 'long' }).format(new Date(year, month - 1, day));
+  }
+
+  private edadDesdeFecha(value: string): number | null {
+    const [year, month, day] = value.split('-').map(Number);
+    const birth = new Date(year, month - 1, day);
+    if (!Number.isFinite(birth.getTime()) || birth.getFullYear() !== year || birth.getMonth() !== month - 1 ||
+      birth.getDate() !== day || birth > new Date()) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
+    return age >= 0 && age <= 200 ? age : null;
   }
 
   numeroOpcional(value: string | number | null | undefined): number | null {
@@ -869,6 +912,12 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       this.carePlanMessage.set('Indica una fecha válida para este cuidado.');
       return;
     }
+    const nextDoseAt = this.carePlanNextDoseAt ? new Date(this.carePlanNextDoseAt) : null;
+    if (this.carePlanType === 'Vacuna' && nextDoseAt &&
+      (!Number.isFinite(nextDoseAt.getTime()) || nextDoseAt <= dueAt)) {
+      this.carePlanMessage.set('La próxima dosis debe ser posterior a la fecha de esta vacuna.');
+      return;
+    }
     const draft: CarePlanDraft = {
       petId: selectedPet.id,
       type: this.carePlanType,
@@ -877,6 +926,12 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       dueAt: dueAt.toISOString(),
       weightKg,
       temperatureC,
+      quantity: this.carePlanType === 'Alimentación' ? this.carePlanQuantity.trim() : '',
+      repeatEveryDays: this.carePlanType === 'Vacuna' || this.carePlanType === 'Control de salud'
+        ? null
+        : this.carePlanRepeatEveryDays,
+      doseNumber: this.carePlanType === 'Vacuna' ? this.carePlanDoseNumber : null,
+      nextDoseAt: this.carePlanType === 'Vacuna' ? nextDoseAt?.toISOString() ?? null : null,
     };
 
     this.savingCarePlan.set(true);
@@ -886,6 +941,10 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       this.carePlanDetails = '';
       this.carePlanWeight = null;
       this.carePlanTemperature = null;
+      this.carePlanQuantity = '';
+      this.carePlanRepeatEveryDays = null;
+      this.carePlanDoseNumber = 1;
+      this.carePlanNextDoseAt = '';
       this.carePlanDueAt = this.fechaLocalInput(this.carePlanType === 'Control de salud' ? 0 : 24 * 60 * 60 * 1000);
       this.carePlanMessage.set(
         this.carePlanType === 'Control de salud'
@@ -908,6 +967,23 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  async cambiarAvisoPlanCuidado(entry: CarePlanEntry, enabled: boolean): Promise<void> {
+    try {
+      if (enabled && !this.carePlan.notificationsEnabled()) {
+        await this.carePlan.enableNotifications();
+        if (!this.carePlan.notificationsEnabled()) {
+          await this.carePlan.reload();
+          return;
+        }
+      }
+      await this.carePlan.setReminderEnabled(entry.id, enabled);
+      this.carePlanMessage.set(enabled ? 'Aviso activado.' : 'Aviso desactivado; el cuidado sigue en tu agenda.');
+    } catch (error) {
+      this.carePlanMessage.set(error instanceof Error ? error.message : 'No se pudo cambiar el aviso.');
+      await this.carePlan.reload();
+    }
+  }
+
   async eliminarPlanCuidado(entry: CarePlanEntry): Promise<void> {
     if (!window.confirm(`¿Eliminar “${entry.title}” de ${entry.petName}?`)) return;
     try {
@@ -921,7 +997,16 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   actualizarTipoCuidado(type: CarePlanType): void {
     this.carePlanType = type;
     this.carePlanTitle = type === 'Control de salud' ? 'Control de salud' : '';
+    this.carePlanQuantity = '';
+    this.carePlanRepeatEveryDays = type === 'Alimentación' ? 1 : null;
+    this.carePlanDoseNumber = 1;
+    this.carePlanNextDoseAt = '';
     if (type === 'Control de salud') this.carePlanDueAt = this.fechaLocalInput(0);
+  }
+
+  numeroOpcionalEntero(value: string | number | null | undefined): number | null {
+    const parsed = this.numeroOpcional(value);
+    return parsed === null ? null : Math.trunc(parsed);
   }
 
   recordatorioLabel(entry: CarePlanEntry): string {

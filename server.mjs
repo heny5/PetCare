@@ -19,6 +19,13 @@ function sendJson(response, statusCode, body) {
   response.end(JSON.stringify(body));
 }
 
+function isDateOnly(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value &&
+    value <= new Date().toISOString().slice(0, 10);
+}
+
 async function getRecords(file = recordsFile) {
   try {
     const content = await readFile(file, 'utf8');
@@ -108,7 +115,7 @@ const server = createServer(async (request, response) => {
       const record = JSON.parse(await readBody(request));
       const activityTypes = new Set([
         'Paseo', 'Alimentación', 'Medicamento', 'Vacuna', 'Desparasitación',
-        'Cita veterinaria', 'Higiene y cuidado', 'Otro',
+        'Cita veterinaria', 'Higiene y cuidado', 'Peluquería', 'Otro',
       ]);
       if (
         !record ||
@@ -162,6 +169,9 @@ const server = createServer(async (request, response) => {
         !['Hembra', 'Macho', 'Sin especificar'].includes(value.sex) ||
         !(value.ageYears === null || (Number.isInteger(value.ageYears) && value.ageYears >= 0 && value.ageYears <= 200)) ||
         !(value.weightKg === null || (typeof value.weightKg === 'number' && Number.isFinite(value.weightKg) && value.weightKg > 0)) ||
+        !(value.dateOfBirth === undefined || value.dateOfBirth === null || value.dateOfBirth === '' ||
+          isDateOnly(value.dateOfBirth)) ||
+        !(value.importantNotes === undefined || (typeof value.importantNotes === 'string' && value.importantNotes.length <= 1000)) ||
         typeof value.createdAt !== 'string' || !Number.isFinite(Date.parse(value.createdAt))
       ) {
         sendJson(response, 400, { error: 'A valid pet profile is required.' });
@@ -172,6 +182,8 @@ const server = createServer(async (request, response) => {
         breed: value.breed.trim(), sex: value.sex, ageYears: value.ageYears,
         weightKg: value.weightKg, createdAt: value.createdAt,
       };
+      if ('dateOfBirth' in value) pet.dateOfBirth = value.dateOfBirth || null;
+      if ('importantNotes' in value) pet.importantNotes = value.importantNotes?.trim() ?? '';
       if (request.method === 'PUT') {
         if (decodeURIComponent(petRoute[1]) !== pet.id) {
           sendJson(response, 400, { error: 'Pet id does not match the URL.' });
