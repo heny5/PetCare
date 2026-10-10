@@ -1,10 +1,12 @@
 import { Injectable } from '@angular/core';
 
+/** Categorías disponibles para buscar servicios y productos para mascotas. */
 export type PlaceCategory =
   | 'petStores'
   | 'petFood'
   | 'veterinary';
 
+/** Lugar normalizado para la lista y el mapa; distance se expresa en kilómetros. */
 export interface NearbyPlace {
   id: string;
   name: string;
@@ -16,12 +18,14 @@ export interface NearbyPlace {
   address: string;
 }
 
+/** Resultado de una búsqueda por nombre o dirección con sus coordenadas. */
 export interface LocationSearchResult {
   name: string;
   latitude: number;
   longitude: number;
 }
 
+// Los nodos traen coordenadas directas; las vías y relaciones pueden traer un centro.
 interface OverpassElement {
   type: string;
   id: number;
@@ -34,28 +38,33 @@ interface OverpassElement {
   tags?: Record<string, string>;
 }
 
+/** Consulta datos de OpenStreetMap y los convierte al formato usado por geolocalización. */
 @Injectable({
   providedIn: 'root'
 })
 export class PlacesService {
+  // Overpass consulta lugares por etiquetas; Nominatim busca ubicaciones por texto.
   private readonly overpassUrl =
     'https://overpass-api.de/api/interpreter';
 
   private readonly nominatimUrl =
     'https://nominatim.openstreetmap.org/search';
 
+  /** Busca por categoría y radio, elimina IDs duplicados y devuelve hasta cincuenta lugares. */
   async getNearbyPlaces(
     latitude: number,
     longitude: number,
     category: PlaceCategory,
     radiusKm: number = 3
   ): Promise<NearbyPlace[]> {
+    // Limita el radio a entre uno y veinte kilómetros y lo convierte a metros para Overpass.
     const safeRadiusKm =
       Math.min(Math.max(radiusKm, 1), 20);
 
     const radiusMeters = safeRadiusKm * 1000;
     const selectors = this.getOverpassSelectors(category);
 
+    // Cada selector agrega una consulta alrededor de las coordenadas del usuario.
     const queries = selectors
       .map(
         (selector) =>
@@ -63,6 +72,7 @@ export class PlacesService {
       )
       .join('\n');
 
+    // Solicita JSON y coordenadas centrales para los elementos que no son nodos.
     const query = `
       [out:json][timeout:25];
       (
@@ -101,6 +111,7 @@ export class PlacesService {
       )
       .filter((place): place is NearbyPlace => place !== null);
 
+    // Deduplica por tipo e ID de OpenStreetMap antes de ordenar por distancia.
     const uniquePlaces = Array.from(
       new Map(
         convertedPlaces.map((place) => [place.id, place])
@@ -112,6 +123,7 @@ export class PlacesService {
       .slice(0, 50);
   }
 
+  /** Busca hasta cinco coincidencias en español a partir de tres caracteres. */
   async searchLocation(
     searchText: string
   ): Promise<LocationSearchResult[]> {
@@ -145,6 +157,7 @@ export class PlacesService {
       lon: string;
     }>;
 
+    // Nominatim devuelve coordenadas como texto; la interfaz necesita valores numéricos.
     return results.map((result) => ({
       name: result.display_name,
       latitude: Number(result.lat),
@@ -152,6 +165,7 @@ export class PlacesService {
     }));
   }
 
+  /** Traduce cada categoría a etiquetas de nodos, vías y relaciones de OpenStreetMap. */
   private getOverpassSelectors(
     category: PlaceCategory
   ): string[] {
@@ -174,6 +188,7 @@ export class PlacesService {
     }
   }
 
+  /** Descarta elementos sin coordenadas y completa nombre, dirección y distancia. */
   private convertElement(
     element: OverpassElement,
     userLatitude: number,
@@ -216,6 +231,7 @@ export class PlacesService {
     };
   }
 
+  // Nombre de respaldo cuando el elemento no tiene nombre ni marca.
   private getDefaultName(
     category: PlaceCategory
   ): string {
@@ -231,6 +247,7 @@ export class PlacesService {
     }
   }
 
+  // Etiqueta legible de la categoría para la lista y las ventanas del mapa.
   private getCategoryLabel(
     category: PlaceCategory
   ): string {
@@ -246,6 +263,7 @@ export class PlacesService {
     }
   }
 
+  // Une los componentes de dirección disponibles sin incluir campos vacíos.
   private buildAddress(
     tags: Record<string, string>
   ): string {
@@ -260,6 +278,7 @@ export class PlacesService {
       : 'Dirección no disponible';
   }
 
+  /** Calcula la distancia geográfica en kilómetros mediante la fórmula de Haversine. */
   private calculateDistance(
     startLatitude: number,
     startLongitude: number,
@@ -294,6 +313,7 @@ export class PlacesService {
     return earthRadius * angle;
   }
 
+  // Convierte grados a radianes para las funciones trigonométricas.
   private toRadians(value: number): number {
     return value * (Math.PI / 180);
   }

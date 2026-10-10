@@ -16,6 +16,7 @@ export const CARE_ACTIVITY_TYPES = [
 
 export type CareActivityType = typeof CARE_ACTIVITY_TYPES[number];
 
+/** Registro de atención con datos opcionales de categoría, mascota y propietario. */
 export interface CareRecord {
   id: string;
   petName: string;
@@ -26,6 +27,7 @@ export interface CareRecord {
   owner?: string;
 }
 
+// Los registros pendientes agregan la fecha en que se incorporaron a la cola local.
 export interface PendingCareRecord extends CareRecord {
   queuedAt: string;
 }
@@ -33,8 +35,10 @@ export interface PendingCareRecord extends CareRecord {
 export type SaveResult = 'sent' | 'queued';
 
 /** Persists every record before sending it and retries until the API accepts it. */
+/** Conserva los cuidados en localStorage antes de enviarlos y reintenta los pendientes. */
 @Injectable({ providedIn: 'root' })
 export class CareRecordService implements OnDestroy {
+  // Clave persistente de la cola y espera de quince segundos entre reintentos.
   private static readonly queueKey = 'petcare.pending-care-records';
   private static readonly retryDelayMs = 15_000;
   private readonly connectivity = inject(ConnectivityService);
@@ -45,6 +49,7 @@ export class CareRecordService implements OnDestroy {
   private activeRequest: AbortController | undefined;
   private destroyed = false;
 
+  // Señales que permiten mostrar la cola, el historial recibido y el estado de las operaciones.
   readonly pendingRecords = this.queue.asReadonly();
   readonly pendingCount = computed(() => this.pendingRecords().length);
   readonly serverRecords = signal<CareRecord[]>([]);
@@ -55,10 +60,12 @@ export class CareRecordService implements OnDestroy {
   readonly migrationError = signal(false);
   readonly lastSyncedAt = signal('');
 
+  // Recupera la cola antigua y reacciona a la conexión para enviar o cancelar el envío activo.
   constructor() {
     this.migrateLegacyQueue();
     effect(() => {
       const online = this.connectivity.isOnline();
+      // El efecto observa la red sin suscribirse a las señales leídas durante la sincronización.
       untracked(() => {
         this.clearRetry();
         if (online) {
@@ -70,6 +77,7 @@ export class CareRecordService implements OnDestroy {
     });
   }
 
+  /** Crea el registro, lo guarda primero en el dispositivo e intenta enviarlo a la API. */
   async save(record: Omit<CareRecord, 'id' | 'createdAt'>): Promise<SaveResult> {
     const entry: PendingCareRecord = {
       ...record,
@@ -88,6 +96,7 @@ export class CareRecordService implements OnDestroy {
     return result;
   }
 
+  // Reutiliza la consulta en curso y solo solicita el historial cuando existe conexión.
   loadRecords(): Promise<void> {
     if (this.loadTask) {
       return this.loadTask;
@@ -109,6 +118,7 @@ export class CareRecordService implements OnDestroy {
     return this.loadTask;
   }
 
+  // Comparte el envío en curso y empieza a vaciar la cola si hay conexión y registros.
   syncPending(): Promise<void> {
     if (this.syncTask) {
       return this.syncTask;
@@ -128,12 +138,14 @@ export class CareRecordService implements OnDestroy {
     return this.syncTask;
   }
 
+  // Cancela el reintento programado y la solicitud activa al destruir el servicio.
   ngOnDestroy(): void {
     this.destroyed = true;
     this.clearRetry();
     this.activeRequest?.abort();
   }
 
+  /** Envía en orden y elimina de la cola solo los registros aceptados por la API. */
   private async drainQueue(): Promise<void> {
     // Read again after each response to include records added during an active send.
     while (!this.destroyed && this.connectivity.isOnline() && this.pendingCount()) {
@@ -149,6 +161,7 @@ export class CareRecordService implements OnDestroy {
     }
   }
 
+  // Envía un registro como JSON y cancela la solicitud si supera diez segundos.
   private async sendToServer(record: CareRecord): Promise<void> {
     const controller = new AbortController();
     this.activeRequest = controller;
@@ -170,6 +183,7 @@ export class CareRecordService implements OnDestroy {
     }
   }
 
+  // Consulta el historial remoto, valida su formato y ordena los registros por fecha.
   private async fetchRecords(): Promise<void> {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 10_000);
@@ -198,6 +212,7 @@ export class CareRecordService implements OnDestroy {
     }
   }
 
+  // Recupera el JSON de la cola; si no puede leer un arreglo, devuelve una lista vacía.
   private readQueue(): PendingCareRecord[] {
     try {
       const value: unknown = JSON.parse(localStorage.getItem(CareRecordService.queueKey) ?? '[]');
@@ -207,11 +222,13 @@ export class CareRecordService implements OnDestroy {
     }
   }
 
+  // Persiste la cola antes de publicar el nuevo estado en memoria.
   private writeQueue(queue: PendingCareRecord[]): void {
     localStorage.setItem(CareRecordService.queueKey, JSON.stringify(queue));
     this.queue.set(queue);
   }
 
+  /** Convierte la cola antigua, evita IDs duplicados y conserva entradas que no pudo migrar. */
   private migrateLegacyQueue(): void {
     try {
       const value = localStorage.getItem('petcare-pendientes');
@@ -224,6 +241,7 @@ export class CareRecordService implements OnDestroy {
       }
       const queue = this.readQueue();
       const ids = new Set(queue.map((record) => record.id));
+      // Mantiene en la clave antigua los elementos cuyo formato no se puede convertir.
       const remaining: unknown[] = [];
       for (const item of legacy) {
         if (
@@ -260,6 +278,7 @@ export class CareRecordService implements OnDestroy {
     }
   }
 
+  // Programa un nuevo intento solo si el servicio sigue activo, conectado y con pendientes.
   private scheduleRetry(): void {
     this.clearRetry();
     if (this.destroyed || !this.connectivity.isOnline() || !this.pendingCount()) {
@@ -271,6 +290,7 @@ export class CareRecordService implements OnDestroy {
     }, CareRecordService.retryDelayMs);
   }
 
+  // Cancela el temporizador previo para evitar reintentos acumulados.
   private clearRetry(): void {
     if (this.retryTimer !== undefined) {
       clearTimeout(this.retryTimer);
@@ -279,6 +299,7 @@ export class CareRecordService implements OnDestroy {
   }
 }
 
+// Valida los tipos de los registros recibidos antes de incorporarlos al historial.
 function isCareRecord(value: unknown): value is CareRecord {
   if (!value || typeof value !== 'object') return false;
   const record = value as Partial<CareRecord>;
@@ -291,6 +312,7 @@ function isCareRecord(value: unknown): value is CareRecord {
     (record.owner === undefined || typeof record.owner === 'string');
 }
 
+// Comprueba que la categoría recibida forma parte de las actividades admitidas.
 function isCareActivityType(value: unknown): value is CareActivityType {
   return typeof value === 'string' && CARE_ACTIVITY_TYPES.includes(value as CareActivityType);
 }

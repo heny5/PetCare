@@ -1,3 +1,4 @@
+// Estilos del contenedor de la página y de los componentes principales de Ionic.
 :host {
   display: block;
 }
@@ -17,17 +18,20 @@ ion-content {
   --padding-bottom: calc(32px + env(safe-area-inset-bottom));
 }
 
+// Controla el desplazamiento dentro de la región de scroll de Ionic.
 ion-content::part(scroll) {
   overflow-y: auto;
   overscroll-behavior-y: contain;
 }
 
+// Limita el ancho y centra el contenido de geolocalización.
 .location-container {
   width: min(100%, 850px);
   margin: 0 auto;
   padding: 18px 16px 40px;
 }
 
+// Presentación visual de los servicios de GPS y mapas.
 .intro {
   padding: 22px;
   margin-bottom: 16px;
@@ -72,6 +76,7 @@ ion-content::part(scroll) {
   background: #bae6fd;
 }
 
+// Apariencia común de las tarjetas de búsqueda, estado y lugares cercanos.
 .search-card,
 .status-card,
 .nearby-card {
@@ -88,6 +93,7 @@ ion-content::part(scroll) {
   }
 }
 
+// Distribuye el campo de búsqueda y su botón en la misma fila.
 .search-row {
   display: grid;
   grid-template-columns:
@@ -119,6 +125,7 @@ ion-content::part(scroll) {
   line-height: 1.4;
 }
 
+// Marco y dimensiones del mapa creado por Leaflet.
 .map-section {
   padding: 5px;
   overflow: hidden;
@@ -136,6 +143,7 @@ ion-content::part(scroll) {
   z-index: 1;
 }
 
+// Distribuye el mensaje de GPS y el indicador de seguimiento.
 .status-heading {
   display: flex;
   align-items: flex-start;
@@ -157,6 +165,7 @@ ion-content::part(scroll) {
   }
 }
 
+// Organiza los valores de la última lectura en una cuadrícula.
 .coordinates {
   display: grid;
   grid-template-columns:
@@ -190,6 +199,7 @@ ion-content::part(scroll) {
   }
 }
 
+// Resalta los errores de ubicación y de consulta.
 .error-message {
   margin-top: 14px;
   padding: 12px;
@@ -200,6 +210,7 @@ ion-content::part(scroll) {
   background: #fef2f2;
 }
 
+// Distribución de los botones de ubicación, seguimiento y compartir.
 .actions {
   display: grid;
   gap: 10px;
@@ -224,6 +235,7 @@ ion-content::part(scroll) {
   line-height: 1.5;
 }
 
+// Apariencia del selector de categorías de establecimientos.
 ion-segment {
   padding: 4px;
   border-radius: 14px;
@@ -238,6 +250,7 @@ ion-segment-button {
   --color-checked: #1e3a8a;
 }
 
+// Estilos del control que modifica el radio de búsqueda en kilómetros.
 .radius-control {
   margin: 16px 0;
   padding: 14px;
@@ -325,6 +338,7 @@ ion-segment-button {
   }
 }
 
+// Adapta tarjetas, mapa y controles a pantallas pequeñas.
 @media (max-width: 580px) {
   .location-container {
     min-height: 100%;
@@ -378,6 +392,7 @@ ion-segment-button {
     }
   }
 
+  // Mantiene accesible el botón de búsqueda durante el desplazamiento en móviles.
   .nearby-button {
     position: sticky;
     bottom: calc(16px + env(safe-area-inset-bottom));

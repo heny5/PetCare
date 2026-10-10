@@ -44,6 +44,7 @@
       </div>
     </header>
 
+    <!-- Menú de la cuenta activa con la acción de cerrar sesión. -->
     <ion-popover
   #userPopover
   [isOpen]="usuarioMenuAbierto()"
@@ -297,6 +298,7 @@
         </section>
       }
 
+      <!-- Lista de fichas del usuario con acciones de consulta, edición y eliminación. -->
       @case ('mascotas') {
         <section class="page">
           <button class="back" type="button" (click)="abrir('inicio')">← Inicio</button>
@@ -305,6 +307,7 @@
             <button class="circle" type="button" aria-label="Agregar mascota" (click)="abrirFormularioMascota()">＋</button>
           </div>
           @if (avisoMascota()) { <p class="success" role="status">{{ avisoMascota() }}</p> }
+          <!-- Confirma la ficha elegida antes de ejecutar su eliminación. -->
           @if (mascotaPorEliminar; as mascota) {
             <section class="pet-delete-confirm" role="alertdialog" aria-labelledby="delete-pet-title" aria-describedby="delete-pet-description">
               <h2 id="delete-pet-title">¿Eliminar a {{ mascota.name }}?</h2>
@@ -334,6 +337,7 @@
           } @else if (petStore.pendingCount() > 0) {
             <p class="pet-sync-status" role="status">Tienes {{ petStore.pendingCount() }} mascota(s) pendiente(s). Se enviarán cuando vuelva la conexión.</p>
           }
+          <!-- Cada ficha muestra su foto guardada o un icono de la especie. -->
           @for (mascota of petStore.pets(); track mascota.id) {
             <article class="pet-list-item">
             <button type="button" class="pet-card pet-card-button"
@@ -366,6 +370,7 @@
         </section>
       }
 
+      <!-- Formulario compartido para crear mascotas y actualizar sus datos. -->
       @case ('nueva-mascota') {
         <section class="page">
           <button class="back" type="button" (click)="abrir('mascotas')">← Mis mascotas</button>
@@ -418,6 +423,7 @@
         </section>
       }
 
+      <!-- Ficha de la mascota seleccionada con foto, datos y accesos a sus cuidados. -->
       @case ('detalle') {
         @if (mascotaSeleccionada(); as mascota) {
         <section class="page">
@@ -433,6 +439,7 @@
             <button class="edit-photo-button" type="button" (click)="alternarOpcionesFoto()" [attr.aria-expanded]="opcionesFotoAbiertas()">
               Editar foto
             </button>
+            <!-- Permite elegir una imagen de galería o capturar otra con la cámara. -->
             @if (opcionesFotoAbiertas()) {
               <div class="photo-actions" aria-label="Opciones de foto">
                 <button class="photo-action" type="button" (click)="agregarFotoGaleria()">
@@ -501,6 +508,7 @@
         }
       }
 
+      <!-- Vista de escaneo BLE y conexión o desconexión de dispositivos detectados. -->
       @case ('conectar') {
         <section class="page centered-page">
           <button
@@ -542,6 +550,7 @@
             </div>
           }
 
+          <!-- Identifica cada fila por el ID del dispositivo y muestra su señal si está disponible. -->
           @for (resultado of deviceLink.bluetoothDevices(); track resultado.device.deviceId) {
             <div class="device-row">
               <span class="device-icon">🐾</span>
@@ -668,6 +677,7 @@
         </section>
       }
 
+      <!-- Vista para leer etiquetas NFC y escribir la ficha de la mascota seleccionada. -->
       @case ('nfc') {
         <section class="page centered-page">
           <button
@@ -982,6 +992,7 @@
               </button>
             </section>
 
+            <!-- Importa un clip del dispositivo con una nota opcional para el historial. -->
             <section class="care-form video-entry-form">
               <small>DIARIO AUDIOVISUAL</small>
               <h2>Agregar video de {{ mascotaHistorialSeleccionada()?.name || 'la mascota' }}</h2>
@@ -1047,6 +1058,7 @@
             }
           </section>
 
+          <!-- Diálogo del álbum: muestra miniaturas o el reproductor del clip elegido. -->
           @if (videoAlbumOpen()) {
             <div class="video-dialog-backdrop" (keydown.escape)="cerrarAlbumVideos()" (click)="cerrarAlbumVideos()">
               <section class="video-dialog album-dialog" role="dialog" aria-modal="true" aria-labelledby="video-dialog-title" tabindex="-1" (click)="$event.stopPropagation()">
@@ -1065,6 +1077,7 @@
                       playsinline
                       preload="auto">
                     </video>
+                    <!-- Controles adicionales de velocidad y pantalla completa. -->
                     <div class="pet-video-controls">
                       <button type="button" (click)="cambiarVelocidadVideo(selectedVideoPlayer)" [attr.aria-label]="'Velocidad ' + selectedVideoPlayer.playbackRate">{{ selectedVideoPlayer.playbackRate }}×</button>
                       <button type="button" (click)="expandirVideo(selectedVideoPlayer)" aria-label="Pantalla completa">⛶</button>
@@ -1080,6 +1093,7 @@
                     <p class="video-album-empty">Todavía no hay videos. Usa “Agregar video” para elegir un clip de la galería.</p>
                   } @else {
                     <div class="video-album-grid">
+                      <!-- Miniaturas de los clips guardados para la cuenta y mascota seleccionadas. -->
                       @for (clip of petMedia.clips(); track clip.id) {
                         <article class="video-album-item">
                           <button class="video-album-open" type="button" (click)="abrirReproductorVideo(clip)" [attr.aria-label]="'Reproducir video: ' + (clip.caption || clip.petName)">

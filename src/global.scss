@@ -134,12 +134,14 @@ ion-popover.user-popover .logout-button:active {
 .history-entry-form > p { margin: 7px 0 12px; color: #d0dbd7; font-size: 12px; line-height: 1.45; }
 .care-form select { display: block; width: 100%; padding: 7px 0 0; border: 0; color: white; background: transparent; font: inherit; font-size: 15px; }
 .care-form select option { color: #18332d; background: white; }
+// Formulario de importación de videos y presentación de su nota opcional.
 .video-entry-form { margin-top: 14px; }
 .video-entry-form > small:first-child { color: var(--green-dark); font-size: 10px; font-weight: 850; letter-spacing: .08em; }
 .video-entry-form > p { margin: 7px 0 12px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .video-entry-form label { display: block; margin: 13px 0 9px; font-size: 12px; font-weight: 750; }
 .video-entry-form label span { color: var(--muted); font-size: 10px; font-weight: 400; }
 .video-entry-form input[type="text"] { display: block; box-sizing: border-box; width: 100%; min-height: 43px; margin-top: 6px; padding: 9px 11px; border: 1px solid #bdcfc8; border-radius: 10px; color: var(--ink); background: #fbfdfc; font: inherit; font-size: 12px; }
+// Distribuye las acciones para importar clips y abrir el álbum.
 .video-entry-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .video-entry-actions button { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; min-height: 42px; padding: 7px; border: 1px solid transparent; border-radius: 11px; font: inherit; font-size: 10px; font-weight: 850; }
 .video-entry-actions .video-add-button { color: white; background: var(--green); }
@@ -147,9 +149,11 @@ ion-popover.user-popover .logout-button:active {
 .video-entry-actions .video-album-launch { color: var(--green-dark); border-color: #cde9df; background: #e8f7f1; }
 .video-entry-actions .video-album-launch span { display: grid; min-width: 21px; height: 21px; place-items: center; border-radius: 7px; color: white; background: var(--green); font-size: 9px; }
 .video-limit { display: block; margin-top: 8px; color: var(--muted); font-size: 10px; line-height: 1.4; text-align: center; }
+// Contenedor de reproducción con adaptación a pantalla completa.
 .pet-video-player { overflow: hidden; margin-top: 10px; border: 1px solid #d6e4df; border-radius: 15px; background: #10231f; }
 .pet-video-player:fullscreen { display: grid; align-content: center; border: 0; border-radius: 0; background: #07110f; }
 .pet-video-player video { display: block; width: 100%; max-height: 62vh; aspect-ratio: 16 / 9; object-fit: contain; background: #07110f; }
+// Distribución y apariencia de los controles adicionales del reproductor.
 .pet-video-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; color: white; background: #17352e; }
 .pet-video-controls button { display: grid; min-width: 33px; min-height: 33px; place-items: center; padding: 4px 7px; border: 1px solid #47776b; border-radius: 9px; color: white; background: #21483f; font: inherit; font-size: 11px; font-weight: 800; }
 .pet-video-controls input[type="range"] { flex: 1 1 70px; min-width: 65px; accent-color: #4ce0bb; }
@@ -163,9 +167,11 @@ ion-popover.user-popover .logout-button:active {
 .video-album-heading h2 { margin: 2px 0 0; font-size: 17px; }
 .video-album-heading > span { display: grid; min-width: 30px; height: 30px; place-items: center; padding: 0 7px; border-radius: 10px; color: var(--green-dark); background: #e5f6ef; font-size: 11px; font-weight: 850; }
 .video-album-empty { margin: 0; padding: 13px; border-radius: 12px; color: var(--muted); background: #f3f8f6; font-size: 12px; }
+// Organiza las miniaturas de los clips en dos columnas.
 .video-album-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .video-album-item { min-width: 0; overflow: hidden; border: 1px solid #dce9e4; border-radius: 13px; background: #fbfdfc; }
 .video-album-open { display: block; width: 100%; padding: 0; border: 0; color: var(--ink); text-align: left; background: transparent; }
+// Superpone el botón de reproducción y la duración sobre la miniatura.
 .video-album-thumb { position: relative; display: grid; aspect-ratio: 16 / 10; place-items: center; overflow: hidden; color: white; background: #17352e; }
 .video-album-thumb > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .video-album-thumb > span:first-child:not(.video-album-play) { font-size: 20px; }
@@ -173,7 +179,9 @@ ion-popover.user-popover .logout-button:active {
 .video-album-thumb > small { position: absolute; right: 5px; bottom: 5px; padding: 3px 5px; border-radius: 5px; color: white; background: rgba(0,0,0,.68); font-size: 9px; }
 .video-album-open > b,.video-album-open > small { display: block; overflow: hidden; margin: 7px 8px 0; text-overflow: ellipsis; white-space: nowrap; }
 .video-album-open > b { font-size: 11px; }.video-album-open > small { margin-top: 3px; margin-bottom: 8px; color: var(--muted); font-size: 9px; }
+// Botón para eliminar cada clip desde su tarjeta del álbum.
 .video-album-delete { width: 100%; min-height: 29px; border: 0; border-top: 1px solid #e5eeea; color: #8d3c3f; background: #fffafa; font: inherit; font-size: 10px; font-weight: 750; }
+// Fondo superpuesto y diálogo que contiene el álbum y el reproductor.
 .video-dialog-backdrop { position: fixed; z-index: 12000; inset: 0; display: grid; place-items: center; padding: 12px; background: rgba(5,20,17,.72); }
 .video-dialog { box-sizing: border-box; width: min(100%, 520px); max-height: 92dvh; overflow: auto; padding: 14px; border: 1px solid #d8e6e1; border-radius: 18px; background: #fbfdfc; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
 .video-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
@@ -181,6 +189,7 @@ ion-popover.user-popover .logout-button:active {
 .video-dialog header button { flex: 0 0 auto; display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: white; font-size: 20px; }
 .video-dialog .pet-video-player video { max-height: 48dvh; }
 .video-dialog-date { margin: 9px 2px 0; color: var(--muted); font-size: 10px; }
+// Reduce espacios y controles multimedia en pantallas pequeñas.
 @media (max-width: 390px) { .video-album-grid { gap: 7px; }.video-album { padding: 12px; }.video-dialog { padding: 10px; }.video-dialog .pet-video-controls { gap: 4px; padding: 6px; } }
 .care-planner-form ion-input,.care-planner-form ion-select,.care-planner-form ion-textarea { box-sizing: border-box; display: block; width: 100%; margin: 8px 0 14px; --background: #fbfdfc; --border-color: #bdcfc8; --border-radius: 11px; --color: var(--ink); --highlight-color-focused: var(--green); --padding-start: 12px; --padding-end: 12px; font-size: 13px; }
 .care-planner-form ion-textarea { min-height: 74px; }

@@ -1,3 +1,4 @@
+<!-- Pantalla de usuarios: ingreso y creación de cuenta comparten el mismo formulario. -->
 <ion-content [fullscreen]="true" class="petcare-content">
   <main class="app-shell">
     <header class="auth-brand">
@@ -10,6 +11,7 @@
         <span class="eyebrow">{{ isRegister() ? 'Únete a PetCare' : 'Bienvenido de nuevo' }}</span>
         <h1>{{ isRegister() ? 'Crear cuenta' : 'Iniciar sesión' }}</h1>
 
+        <!-- Envía los campos al componente y vincula cada entrada con su señal. -->
         <form (ngSubmit)="submit()">
           <ion-input id="username" name="username" type="text" autocomplete="username" required
             fill="outline" label="Usuario" labelPlacement="stacked"
@@ -19,19 +21,23 @@
             [attr.autocomplete]="isRegister() ? 'new-password' : 'current-password'" required
             [ngModel]="password()" (ngModelChange)="password.set($event)" />
 
+          <!-- El teléfono se solicita únicamente durante el registro de una cuenta. -->
           @if (isRegister()) {
             <ion-input id="phone" name="phone" type="tel" autocomplete="tel" required
               fill="outline" label="Teléfono" labelPlacement="stacked"
               [ngModel]="phone()" (ngModelChange)="phone.set($event)" />
           }
 
+          <!-- Informa los errores de validación o de autenticación. -->
           @if (error()) { <p class="field-error" role="alert">{{ error() }}</p> }
 
+          <!-- Deshabilita el envío mientras se procesa la operación. -->
           <button class="primary wide" type="submit" [disabled]="busy()">
             {{ busy() ? 'Un momento…' : isRegister() ? 'Crear cuenta' : 'Iniciar sesión' }}
           </button>
         </form>
 
+        <!-- Cambia el modo entre iniciar sesión y crear cuenta. -->
         <button class="text-button" type="button" (click)="toggleMode()">
           {{ isRegister() ? '¿Ya tienes una cuenta? Iniciar sesión' : '¿No tienes una cuenta? Crear cuenta' }}
         </button>

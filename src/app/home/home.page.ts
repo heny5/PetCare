@@ -112,6 +112,7 @@ interface HistorialEvent {
 export class HomePage implements OnChanges, OnInit, OnDestroy {
   @Input({ required: true }) initialView!: Vista;
 
+  // Sesión compartida que identifica al propietario de las mascotas y de sus videos.
   readonly auth = inject(AuthService);
   private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly router = inject(Router);
@@ -122,12 +123,14 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   readonly nfcMatchedPet = signal<StoredPet | undefined>(undefined);
   readonly careRecords = inject(CareRecordService);
   readonly carePlan = inject(CarePlanService);
+  // Servicio de videos y señales que controlan el álbum y el clip seleccionado.
   readonly petMedia = inject(PetMediaService);
   readonly videoAlbumOpen = signal(false);
   readonly selectedVideoId = signal('');
   readonly selectedVideo = computed(() =>
     this.petMedia.clips().find((clip) => clip.id === this.selectedVideoId())
   );
+  // Referencia al reproductor para pausarlo al cerrar el álbum o destruir la vista.
   @ViewChild('selectedVideoPlayer') private selectedVideoRef?: ElementRef<HTMLVideoElement>;
   readonly activityTypes = CARE_ACTIVITY_TYPES;
   readonly historialMascotaId = signal('');
@@ -193,17 +196,21 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   readonly sexos = PET_SEXES;
   readonly errorMascota = signal('');
   readonly avisoMascota = signal('');
+  // Las fotos se recuperan de localStorage como un mapa de ID de mascota a imagen Base64.
   readonly fotosMascota = signal<Record<string, string>>(this.leerFotosMascota());
   readonly errorFoto = signal('');
   readonly opcionesFotoAbiertas = signal(false);
   readonly usuarioMenuAbierto = signal(false);
+  // Selecciona la ficha activa; si no hay coincidencia, utiliza la primera mascota disponible.
   private readonly mascotaId = signal('');
   readonly mascotaSeleccionada = computed<StoredPet | undefined>(() =>
     this.petStore.pets().find((pet) => pet.id === this.mascotaId()) ?? this.petStore.pets()[0]
   );
+  // Estado del formulario compartido para crear o editar una ficha y confirmar su eliminación.
   nuevaMascota: PetDraft = this.formularioMascotaVacio();
   editandoMascotaId: string | null = null;
   mascotaPorEliminar: StoredPet | null = null;
+  // Estado de red compartido con los servicios que sincronizan registros pendientes.
   private readonly connectivity = inject(ConnectivityService);
   private readonly mensajeLocal = signal('');
   readonly guardando = signal(false);
@@ -218,9 +225,11 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
 
   get mensaje(): string { return this.mensajeLocal(); }
   set mensaje(value: string) { this.mensajeLocal.set(value); }
+  // Estos getters llevan el estado reactivo de red y sincronización a la plantilla.
   get enLinea(): boolean { return this.connectivity.isOnline(); }
   get sincronizando(): boolean { return this.careRecords.isSynchronizing(); }
   get pendientes() { return this.registrosPendientes(); }
+  // La pantalla de conexión consulta las señales del servicio BLE.
   get buscandoBluetooth(): boolean { return this.deviceLink.isScanningBluetooth(); }
   get dispositivoEncontrado(): boolean { return this.deviceLink.bluetoothDevices().length > 0; }
   get dispositivoConectado(): boolean { return this.deviceLink.connectedBluetoothDeviceId().length > 0; }
@@ -260,6 +269,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   nombreMascota = '';
   cuidadoRealizado = '';
   historyCategory: CareActivityType = 'Otro';
+  // Nota del clip e indicadores de mensaje y guardado de multimedia.
   videoCaption = '';
   readonly videoMessage = signal('');
   readonly savingVideo = signal(false);
@@ -346,12 +356,14 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       void this.careRecords.loadRecords();
     }
     try {
+      // Obtiene la conexión inicial y escucha los cambios detectados por Capacitor.
       const estado = await Network.getStatus();
       if (this.destroyed) return;
       this.actualizarEstadoRed(estado);
       const listener = await Network.addListener('networkStatusChange', (status) => {
         this.actualizarEstadoRed(status);
       });
+      // Si la vista se destruyó mientras se registraba el listener, lo retira de inmediato.
       if (this.destroyed) {
         await listener.remove();
       } else {
@@ -365,9 +377,11 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   async ngOnDestroy(): Promise<void> {
     this.destroyed = true;
     this.selectedVideoRef?.nativeElement.pause();
+    // Libera el listener de red cuando se destruye la pantalla.
     await this.networkListener?.remove();
   }
 
+  // Cierra el menú de usuario, elimina la sesión y navega a la pantalla de ingreso.
   async cerrarSesion(popover: IonPopover): Promise<void> {
     await popover.dismiss();
     this.usuarioMenuAbierto.set(false);
@@ -443,6 +457,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Prepara una ficha vacía y restablece los mensajes para registrar otra mascota.
   abrirFormularioMascota(): void {
     this.editandoMascotaId = null;
     this.nuevaMascota = this.formularioMascotaVacio();
@@ -451,6 +466,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.abrir('nueva-mascota');
   }
 
+  /** Valida el formulario y decide entre crear una ficha o actualizar la que se está editando. */
   async registrarMascota(form: NgForm): Promise<void> {
     if (this.vista !== 'nueva-mascota') return;
     this.errorMascota.set('');
@@ -471,6 +487,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Activa la ficha elegida y restablece el estado de sus controles de foto.
   seleccionarMascota(pet: StoredPet | undefined): void {
     if (!pet) { this.abrir('mascotas'); return; }
     this.mascotaId.set(pet.id);
@@ -481,24 +498,29 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.abrir('detalle');
   }
 
+  // Muestra u oculta las opciones de cámara y galería.
   alternarOpcionesFoto(): void {
     this.errorFoto.set('');
     this.opcionesFotoAbiertas.update((abiertas) => !abiertas);
   }
 
+  // Solicita una imagen existente desde la galería del dispositivo.
   agregarFotoGaleria(): Promise<void> {
     return this.cambiarFoto('galeria');
   }
 
+  // Abre la cámara para capturar la foto de la mascota seleccionada.
   tomarFoto(): Promise<void> {
     return this.cambiarFoto('camara');
   }
 
+  /** Obtiene una foto de cámara o galería y guarda su miniatura como imagen de la ficha. */
   private async cambiarFoto(origen: 'galeria' | 'camara'): Promise<void> {
     const mascota = this.mascotaSeleccionada();
     if (!mascota) return;
     this.errorFoto.set('');
     try {
+      // La captura usa JPEG y tamaño objetivo de 640 píxeles; ambos orígenes permiten edición.
       const imagen = origen === 'camara'
         ? await Camera.takePhoto({
             quality: 82,
@@ -515,9 +537,11 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
             includeMetadata: true,
           })).results[0];
       if (!imagen?.thumbnail) throw new Error('No se recibió la imagen.');
+      // Convierte la miniatura recibida a una URL de datos que puede mostrar la plantilla.
       const formato = imagen.metadata?.format === 'png' ? 'png' : 'jpeg';
       const foto = `data:image/${formato};base64,${imagen.thumbnail}`;
       const fotos = { ...this.fotosMascota(), [mascota.id]: foto };
+      // Guarda primero el mapa de fotos y después actualiza su señal en la interfaz.
       localStorage.setItem('petcare.fotos-mascotas', JSON.stringify(fotos));
       this.fotosMascota.set(fotos);
       this.opcionesFotoAbiertas.set(false);
@@ -525,11 +549,13 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       const codigo = typeof error === 'object' && error !== null && 'code' in error
         ? error.code
         : undefined;
+      // Cancelar la cámara o la galería finaliza la operación sin mostrar un error.
       if (codigo === CameraErrorCode.TakePhotoCancelled || codigo === CameraErrorCode.ChooseMediaCancelled) return;
       this.errorFoto.set('No se pudo guardar la foto. Prueba con otra imagen.');
     }
   }
 
+  // Recupera el mapa de fotos y utiliza uno vacío si el JSON no se puede leer.
   private leerFotosMascota(): Record<string, string> {
     try {
       const fotos: unknown = JSON.parse(localStorage.getItem('petcare.fotos-mascotas') ?? '{}');
@@ -542,6 +568,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
   }
 
 
+  // Copia los datos de la ficha seleccionada al formulario de edición.
   editarMascota(pet: StoredPet): void {
     this.editandoMascotaId = pet.id;
     this.nuevaMascota = {
@@ -554,12 +581,14 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.abrir('nueva-mascota');
   }
 
+  // Selecciona la ficha que se mostrará en la confirmación de eliminación.
   solicitarEliminarMascota(pet: StoredPet): void {
     this.errorMascota.set('');
     this.avisoMascota.set('');
     this.mascotaPorEliminar = pet;
   }
 
+  // Elimina la ficha confirmada y recarga sus planes antes de volver a la lista.
   async eliminarMascota(): Promise<void> {
     const pet = this.mascotaPorEliminar;
     if (!pet) return;
@@ -575,6 +604,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Selecciona la mascota de la ficha como destinataria de los próximos cuidados.
   abrirCuidadosMascota(): void {
     const pet = this.mascotaSeleccionada();
     if (!pet) { this.abrir('mascotas'); return; }
@@ -583,10 +613,12 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.abrir('cuidados');
   }
 
+  // Usa un icono por especie como alternativa cuando no hay una foto guardada.
   iconoMascota(species: string): string {
     return ({ Perro: '🐕', Gato: '🐈', Ave: '🐦', Conejo: '🐇' } as Record<string, string>)[species] ?? '🐾';
   }
 
+  // Presenta la edad y, si existe fecha de nacimiento, la calcula a partir de esa fecha.
   edadMascota(age: number | null, dateOfBirth?: string | null): string {
     if (dateOfBirth) age = this.edadDesdeFecha(dateOfBirth);
     if (age === null) return 'Edad sin especificar';
@@ -594,6 +626,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     return `${age} ${age === 1 ? 'año' : 'años'}`;
   }
 
+  // Valores iniciales del formulario; edad, peso y fecha pueden quedar sin especificar.
   private formularioMascotaVacio(): PetDraft {
     return {
       name: '', species: 'Perro', breed: '', sex: 'Sin especificar', ageYears: null, weightKg: null,
@@ -601,17 +634,20 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     };
   }
 
+  // Mantiene la edad del formulario acorde con la fecha de nacimiento seleccionada.
   actualizarFechaNacimiento(value: string | null | undefined): void {
     const dateOfBirth = value || null;
     this.nuevaMascota.dateOfBirth = dateOfBirth;
     this.nuevaMascota.ageYears = dateOfBirth ? this.edadDesdeFecha(dateOfBirth) : null;
   }
 
+  // Presenta la fecha en español usando sus componentes para crear una fecha local.
   formatearFechaNacimiento(value: string): string {
     const [year, month, day] = value.split('-').map(Number);
     return new Intl.DateTimeFormat('es-DO', { dateStyle: 'long' }).format(new Date(year, month - 1, day));
   }
 
+  // Valida la fecha y calcula años completos, descontando el cumpleaños que aún no ocurrió.
   private edadDesdeFecha(value: string): number | null {
     const [year, month, day] = value.split('-').map(Number);
     const birth = new Date(year, month - 1, day);
@@ -629,6 +665,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  // Delega la conexión BLE y comunica el resultado al usuario.
   async conectar(deviceId: string): Promise<void> {
     try {
       await this.deviceLink.connectBluetooth(deviceId);
@@ -638,6 +675,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Inicia el escaneo BLE y muestra cuántos dispositivos se encontraron.
   async buscarDispositivos(): Promise<void> {
     this.mensaje = 'Buscando dispositivos Bluetooth LE cercanos…';
     try {
@@ -651,6 +689,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Cierra el enlace BLE y registra una alerta de desconexión.
   async desconectar(): Promise<void> {
     try {
       await this.deviceLink.disconnectBluetooth();
@@ -661,6 +700,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  /** Lee una ficha NFC y busca una mascota local con el mismo identificador y nombre. */
   async leerEtiquetaNfc(): Promise<void> {
     this.nfcReadResult.set(null);
     this.nfcSharedPet.set(null);
@@ -688,6 +728,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  /** Serializa la ficha seleccionada con tipo y versión para escribirla en una etiqueta. */
   async compartirFichaNfc(): Promise<void> {
     const pet = this.mascotaSeleccionada();
     if (!pet) {
@@ -707,10 +748,12 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Abre la mascota local que coincidió con la ficha leída.
   abrirMascotaLeidaNfc(): void {
     this.seleccionarMascota(this.nfcMatchedPet());
   }
 
+  /** Valida el formato y los campos de la ficha NFC antes de usar su contenido. */
   private parseNfcPetProfile(text: string): { id: string; name: string; species: string; breed: string } | null {
     try {
       const value: unknown = JSON.parse(text);
@@ -773,6 +816,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  /** Importa un video de galería, comprueba sus límites y lo guarda para la mascota del historial. */
   async agregarVideoHistorial(): Promise<void> {
     if (this.savingVideo()) return;
     const pet = this.mascotaHistorialSeleccionada();
@@ -789,6 +833,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
         mediaType: MediaTypeSelection.Video,
         includeMetadata: true,
       });
+      // Acepta un resultado de tipo video y revisa los metadatos disponibles antes de leerlo.
       const selectedVideo = results.find((item) => item.type === MediaType.Video);
       if (!selectedVideo) return;
       if (selectedVideo.metadata?.size && selectedVideo.metadata.size > PetMediaService.maxSizeBytes) {
@@ -799,12 +844,15 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
       }
       if (!selectedVideo.webPath) throw new Error('No se pudo acceder al archivo seleccionado.');
 
+      // Lee el archivo accesible por webPath y obtiene su contenido Blob para IndexedDB.
       const response = await fetch(selectedVideo.webPath);
       if (!response.ok) throw new Error('No se pudo leer el video de la galería.');
       const length = Number(response.headers.get('content-length'));
       if (length > PetMediaService.maxSizeBytes) throw new Error('El video debe pesar menos de 35 MB.');
       const blob = await response.blob();
+      // Si faltan metadatos de duración, la obtiene mediante un elemento de video temporal.
       const duration = selectedVideo.metadata?.duration || await this.duracionVideo(blob);
+      // Evita guardar el clip para otra cuenta o mascota si la selección cambió durante la espera.
       if (this.auth.currentUser()?.trim() !== owner || this.mascotaHistorialSeleccionada()?.id !== pet.id) {
         throw new Error('Cambió la mascota o la sesión. Selecciónala de nuevo e inténtalo.');
       }
@@ -828,6 +876,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Solicita confirmación y delega la eliminación del archivo al servicio multimedia.
   async eliminarVideoHistorial(clip: PetVideoClip): Promise<void> {
     if (!window.confirm(`¿Eliminar este video del historial de ${clip.petName}?`)) return;
     try {
@@ -838,32 +887,38 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Selecciona el clip que se mostrará dentro del diálogo del álbum.
   abrirReproductorVideo(clip: PetVideoClip): void {
     this.selectedVideoId.set(clip.id);
   }
 
+  // Abre la vista de miniaturas sin mantener seleccionado un reproductor anterior.
   abrirAlbumVideos(): void {
     this.selectedVideoId.set('');
     this.videoAlbumOpen.set(true);
   }
 
+  // Detiene la reproducción antes de regresar a la cuadrícula de clips.
   volverAlbumVideos(player: HTMLVideoElement): void {
     player.pause();
     this.selectedVideoId.set('');
   }
 
+  // Pausa el video, limpia la selección y oculta el diálogo.
   cerrarAlbumVideos(): void {
     this.selectedVideoRef?.nativeElement.pause();
     this.selectedVideoId.set('');
     this.videoAlbumOpen.set(false);
   }
 
+  // Alterna las velocidades de reproducción entre 1, 1.25, 1.5 y 2 veces.
   cambiarVelocidadVideo(player: HTMLVideoElement): void {
     const speeds = [1, 1.25, 1.5, 2];
     const index = speeds.indexOf(player.playbackRate);
     player.playbackRate = speeds[(index + 1) % speeds.length];
   }
 
+  // Alterna la pantalla completa del contenedor para incluir video y controles.
   expandirVideo(player: HTMLVideoElement): void {
     const surface = player.parentElement;
     if (!surface) return;
@@ -874,12 +929,14 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Convierte una duración en segundos al formato minutos:segundos.
   formatearTiempoVideo(seconds: number): string {
     if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
     const wholeSeconds = Math.floor(seconds);
     return `${Math.floor(wholeSeconds / 60)}:${String(wholeSeconds % 60).padStart(2, '0')}`;
   }
 
+  /** Lee la duración del Blob mediante metadatos y libera la URL temporal al terminar. */
   private async duracionVideo(blob: Blob): Promise<number> {
     const url = URL.createObjectURL(blob);
     try {
@@ -1066,6 +1123,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.cargarVideosHistorial(petId);
   }
 
+  // Carga los clips usando la cuenta activa y el ID de la mascota del historial.
   private cargarVideosHistorial(petId: string): void {
     const owner = this.auth.currentUser()?.trim() ?? '';
     void this.petMedia.loadForPet(owner, petId).catch(() => {
@@ -1073,6 +1131,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     });
   }
 
+  // Solicita la sincronización manual únicamente con conexión y registros pendientes.
   async sincronizarPendientes(): Promise<void> {
     if (!this.enLinea) {
       this.mensaje = 'No hay conexión. Los datos continúan guardados en este dispositivo.';
@@ -1085,6 +1144,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     await this.careRecords.syncPending();
   }
 
+  // Publica el estado del plugin Network en el servicio de conectividad compartido.
   private actualizarEstadoRed(status: ConnectionStatus): void {
     this.connectivity.updateNetworkStatus(status.connected);
   }
@@ -1124,10 +1184,12 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     if (this.mascotaPerdida) void this.generarQrMascotaPerdida(pet);
   }
 
+  // Compone una clave por usuario y mascota para separar sus estados de alerta.
   private claveMascotaPerdida(username: string, petId: string): string {
     return `${encodeURIComponent(username)}:${petId}`;
   }
 
+  // Recupera los estados persistidos y devuelve un mapa vacío si el JSON no es válido.
   private leerMascotasPerdidas(): Record<string, { active: boolean; reportedAt: string }> {
     try {
       const value: unknown = JSON.parse(localStorage.getItem('petcare.lost-pets') ?? '{}');
@@ -1230,6 +1292,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     this.crearAlertaPrueba();
   }
 
+  // Retira claves antiguas y recupera las alertas conservadas en este dispositivo.
   private cargarEstadoLocal(): void {
     try {
       localStorage.removeItem('petcare-mascota-perdida');
@@ -1251,6 +1314,7 @@ export class HomePage implements OnChanges, OnInit, OnDestroy {
     }
   }
 
+  // Guarda la lista de alertas en localStorage para recuperarla al abrir otra vez la aplicación.
   private guardarEstadoLocal(): void {
     localStorage.setItem(
       'petcare-alertas',

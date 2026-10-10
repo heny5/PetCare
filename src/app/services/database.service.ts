@@ -4,6 +4,7 @@ import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacito
 import { PetDraft, StoredPet } from './pet.model';
 import { CarePlanDraft, CarePlanEntry } from './care-plan.model';
 
+/** Registro de una cuenta; password contiene la contraseña derivada por AuthService. */
 export interface UserRecord {
   id: number;
   username: string;
@@ -12,13 +13,16 @@ export interface UserRecord {
   created_at: string;
 }
 
+/** Centraliza SQLite para cuentas, mascotas y planes de cuidado, tanto en web como en móvil. */
 @Injectable({ providedIn: 'root' })
 export class DatabaseService {
   private readonly databaseName = 'petcare';
   private readonly sqlite = new SQLiteConnection(CapacitorSQLite);
   private database?: SQLiteDBConnection;
+  // Comparte la inicialización para que las consultas esperen la misma apertura.
   private initialization?: Promise<void>;
 
+  /** Abre la base de datos una vez y permite reintentar si la inicialización falla. */
   initialize(): Promise<void> {
     this.initialization ??= this.openDatabase().catch((error: unknown) => {
       this.initialization = undefined;
@@ -27,6 +31,7 @@ export class DatabaseService {
     return this.initialization;
   }
 
+  // Inserta una cuenta con su hash de contraseña y fecha de creación.
   async registerUser(username: string, passwordHash: string, phone: string): Promise<void> {
     const database = await this.getDatabase();
     await database.run(
@@ -36,28 +41,34 @@ export class DatabaseService {
     if (Capacitor.getPlatform() === 'web') await this.sqlite.saveToStore(this.databaseName);
   }
 
+  // Consulta si el nombre de usuario ya pertenece a una cuenta.
   async usernameExists(username: string): Promise<boolean> {
     return (await this.findUser('username', username)) !== undefined;
   }
 
+  // Consulta si el teléfono ya está registrado.
   async phoneExists(phone: string): Promise<boolean> {
     return (await this.findUser('phone', phone)) !== undefined;
   }
 
+  // Devuelve el registro de la cuenta; AuthService realiza la comprobación de contraseña.
   async validateLogin(username: string): Promise<UserRecord | undefined> {
     return this.findUser('username', username);
   }
 
+  // Resuelve el ID numérico utilizado para relacionar la cuenta con sus mascotas.
   async getUserId(username: string): Promise<number | null> {
     const user = await this.findUser('username', username);
     return user?.id ?? null;
   }
 
+  // Obtiene el nombre y teléfono utilizados como datos de contacto.
   async getUserContact(username: string): Promise<{ username: string; phone: string } | null> {
     const user = await this.findUser('username', username);
     return user ? { username: user.username, phone: user.phone } : null;
   }
 
+  /** Lee las mascotas de una cuenta y convierte las filas SQL al modelo de la aplicación. */
   async listPets(userId: number): Promise<StoredPet[]> {
     const database = await this.getDatabase();
     const result = await database.query(
@@ -79,6 +90,7 @@ export class DatabaseService {
     }));
   }
 
+  // Inserta la ficha y usa el ID generado por SQLite para devolver la mascota guardada.
   async addPet(userId: number, draft: PetDraft): Promise<StoredPet> {
     const database = await this.getDatabase();
     const now = new Date().toISOString();
@@ -93,6 +105,7 @@ export class DatabaseService {
     return { ...draft, name: draft.name.trim(), breed: draft.breed.trim(), id: String(id), createdAt: now, pending: false };
   }
 
+  // Actualiza únicamente la ficha cuyo identificador y propietario coinciden.
   async updatePet(userId: number, id: string, draft: PetDraft): Promise<void> {
     const database = await this.getDatabase();
     const result = await database.run(
@@ -104,6 +117,7 @@ export class DatabaseService {
     await this.saveWebDatabase();
   }
 
+  // Elimina únicamente una mascota de la cuenta indicada.
   async deletePet(userId: number, id: string): Promise<void> {
     const database = await this.getDatabase();
     const result = await database.run('DELETE FROM pets WHERE id = ? AND user_id = ?', [Number(id), userId]);
@@ -111,6 +125,7 @@ export class DatabaseService {
     await this.saveWebDatabase();
   }
 
+  /** Consulta planes con el nombre de su mascota y prioriza los pendientes por fecha. */
   async listCarePlans(userId: number): Promise<CarePlanEntry[]> {
     const database = await this.getDatabase();
     const result = await database.query(
@@ -146,6 +161,7 @@ export class DatabaseService {
     }));
   }
 
+  // Comprueba la propiedad de la mascota antes de guardar el plan asociado.
   async addCarePlan(userId: number, draft: CarePlanDraft & { id: string }): Promise<void> {
     const database = await this.getDatabase();
     const pet = await database.query(
@@ -154,6 +170,7 @@ export class DatabaseService {
     );
     if (!pet.values?.length) throw new Error('La mascota seleccionada no pertenece a esta cuenta.');
     const createdAt = new Date().toISOString();
+    // Los controles de salud se guardan como realizados; los demás planes quedan pendientes.
     const completedAt = draft.type === 'Control de salud' ? createdAt : null;
     await database.run(
       `INSERT INTO care_plans
@@ -168,6 +185,7 @@ export class DatabaseService {
     await this.saveWebDatabase();
   }
 
+  // Cambia el recordatorio solo en planes de la cuenta que aún no se han completado.
   async setCarePlanReminderEnabled(userId: number, id: string, enabled: boolean): Promise<void> {
     const database = await this.getDatabase();
     const result = await database.run(
@@ -178,6 +196,7 @@ export class DatabaseService {
     await this.saveWebDatabase();
   }
 
+  // Marca o desmarca la realización del plan y, al reabrirlo, elimina sus derivados pendientes.
   async setCarePlanCompleted(userId: number, id: string, completed: boolean): Promise<void> {
     const database = await this.getDatabase();
     const result = await database.run(
@@ -194,6 +213,7 @@ export class DatabaseService {
     await this.saveWebDatabase();
   }
 
+  // Elimina un plan únicamente si pertenece a la cuenta indicada.
   async deleteCarePlan(userId: number, id: string): Promise<void> {
     const database = await this.getDatabase();
     const result = await database.run('DELETE FROM care_plans WHERE id = ? AND user_id = ?', [id, userId]);
@@ -201,12 +221,14 @@ export class DatabaseService {
     await this.saveWebDatabase();
   }
 
+  // Lee los registros de cuentas ordenados por identificador.
   async listUsers(): Promise<UserRecord[]> {
     const database = await this.getDatabase();
     const result = await database.query('SELECT id, username, password, phone, created_at FROM users ORDER BY id');
     return (result.values ?? []) as UserRecord[];
   }
 
+  // El campo se limita a usuario o teléfono y el valor se pasa como parámetro SQL.
   private async findUser(field: 'username' | 'phone', value: string): Promise<UserRecord | undefined> {
     const database = await this.getDatabase();
     const result = await database.query(
@@ -216,17 +238,21 @@ export class DatabaseService {
     return result.values?.[0] as UserRecord | undefined;
   }
 
+  // Toda consulta espera la apertura y creación del esquema antes de usar la conexión.
   private async getDatabase(): Promise<SQLiteDBConnection> {
     await this.initialize();
     return this.database!;
   }
 
+  // En el navegador, guarda el estado de SQLite en el almacén persistente de jeep-sqlite.
   private async saveWebDatabase(): Promise<void> {
     if (Capacitor.getPlatform() === 'web') await this.sqlite.saveToStore(this.databaseName);
   }
 
+  /** Prepara el soporte web, abre SQLite y crea las tablas y columnas necesarias. */
   private async openDatabase(): Promise<void> {
     if (Capacitor.getPlatform() === 'web') {
+      // Espera el componente que permite usar SQLite sobre IndexedDB en el navegador.
       await customElements.whenDefined('jeep-sqlite');
       let jeepSqlite = document.querySelector('jeep-sqlite') as (HTMLElement & {
         componentOnReady?: () => Promise<unknown>;
@@ -244,12 +270,15 @@ export class DatabaseService {
       await this.sqlite.initWebStore();
     }
 
+    // Reutiliza una conexión existente o crea una nueva para la base petcare.
     const connected = await this.sqlite.isConnection(this.databaseName, false);
     this.database = connected.result
       ? await this.sqlite.retrieveConnection(this.databaseName, false)
       : await this.sqlite.createConnection(this.databaseName, false, 'no-encryption', 1, false);
     await this.database.open();
+    // Activa las relaciones: al eliminar usuarios o mascotas, sus filas dependientes se borran en cascada.
     await this.database.execute('PRAGMA foreign_keys = ON;');
+    // Crea las tablas de cuentas, mascotas y cuidados y sus índices si todavía no existen.
     await this.database.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -297,6 +326,7 @@ export class DatabaseService {
       );
       CREATE INDEX IF NOT EXISTS idx_care_plans_user_due ON care_plans(user_id, due_at);
     `);
+    // Agrega columnas incorporadas en versiones posteriores sin recrear las tablas existentes.
     await this.ensureColumn('pets', 'date_of_birth', 'TEXT');
     await this.ensureColumn('pets', 'important_notes', "TEXT NOT NULL DEFAULT ''");
     await this.ensureColumn('care_plans', 'quantity', "TEXT NOT NULL DEFAULT ''");
@@ -307,12 +337,14 @@ export class DatabaseService {
     await this.ensureColumn('care_plans', 'reminder_enabled', 'INTEGER NOT NULL DEFAULT 1');
   }
 
+  // Consulta el esquema y agrega la columna únicamente si aún no está presente.
   private async ensureColumn(table: string, column: string, definition: string): Promise<void> {
     const result = await this.database!.query(`PRAGMA table_info(${table})`);
     if ((result.values ?? []).some((row) => String(row['name']) === column)) return;
     await this.database!.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`);
   }
 
+  // Espera hasta cinco segundos a que el componente web abra su almacenamiento IndexedDB.
   private async waitForWebStore(element: HTMLElement & { isStoreOpen: () => Promise<boolean> }): Promise<void> {
     const deadline = Date.now() + 5000;
     while (Date.now() < deadline) {

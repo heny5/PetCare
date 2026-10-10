@@ -1,3 +1,4 @@
+<!-- Cabecera con navegación de regreso a la pantalla principal. -->
 <ion-header>
   <ion-toolbar>
     <ion-buttons slot="start">
@@ -21,6 +22,7 @@
       </p>
     </section>
 
+    <!-- Búsqueda por texto y selección de resultados para ubicarlos en el mapa. -->
     <ion-card class="search-card">
       <ion-card-content>
         <h2>Buscar una ubicación</h2>
@@ -64,6 +66,7 @@
       </ion-card-content>
     </ion-card>
 
+    <!-- Leaflet utiliza este contenedor para mostrar el mapa y sus marcadores. -->
     <section class="map-section">
       <div
         id="location-map"
@@ -72,6 +75,7 @@
       </div>
     </section>
 
+    <!-- Estado del GPS, seguimiento, última lectura y mensajes de error. -->
     <ion-card class="status-card">
       <ion-card-content>
         <div class="status-heading">
@@ -89,6 +93,7 @@
           </ion-chip>
         </div>
 
+        <!-- Las coordenadas aparecen cuando ya existe una lectura de ubicación. -->
         <div
           class="coordinates"
           *ngIf="
@@ -136,6 +141,7 @@
       </ion-card-content>
     </ion-card>
 
+    <!-- Acciones para obtener ubicación, alternar el seguimiento y compartir coordenadas. -->
     <section class="actions">
       <ion-button
         expand="block"
@@ -176,6 +182,7 @@
       </ion-button>
     </section>
 
+    <!-- Filtros de categoría y radio para consultar establecimientos cercanos. -->
     <ion-card class="nearby-card">
       <ion-card-content>
         <h2>Lugares cercanos para mascotas</h2>
@@ -254,6 +261,7 @@
           }}
         </ion-button>
 
+        <!-- Seleccionar un lugar centra el mapa y abre su ventana informativa. -->
         <ion-list *ngIf="nearbyPlaces.length > 0">
           <ion-item
             button

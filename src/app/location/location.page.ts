@@ -33,6 +33,7 @@ import {
   PlacesService
 } from '../services/places';
 
+/** Pantalla de ubicación, seguimiento, búsqueda de lugares y mapa interactivo. */
 @Component({
   selector: 'app-location',
   templateUrl: './location.page.html',
@@ -62,11 +63,13 @@ import {
   ]
 })
 export class LocationPage implements OnDestroy {
+  // Última lectura disponible: coordenadas en grados, precisión en metros y hora local.
   latitude: number | null = null;
   longitude: number | null = null;
   accuracy: number | null = null;
   lastUpdate = '';
 
+  // Estados independientes para obtener ubicación, seguirla y consultar lugares.
   loading = false;
   tracking = false;
   loadingPlaces = false;
@@ -79,10 +82,12 @@ export class LocationPage implements OnDestroy {
   searchText = '';
   searchResults: LocationSearchResult[] = [];
 
+  // Filtros usados al consultar establecimientos alrededor de la ubicación actual.
   selectedCategory: PlaceCategory = 'petStores';
   searchRadiusKm = 3;
   nearbyPlaces: NearbyPlace[] = [];
 
+  // Referencias de Leaflet y del seguimiento GPS para actualizar y liberar recursos.
   private map?: L.Map;
   private userMarker?: L.CircleMarker;
   private searchMarker?: L.CircleMarker;
@@ -90,6 +95,7 @@ export class LocationPage implements OnDestroy {
   private placesLayer?: L.LayerGroup;
   private watchId: string | null = null;
 
+  // Relaciona cada lugar con su marcador para abrirlo al seleccionar una fila.
   private placeMarkers =
     new Map<string, L.CircleMarker>();
 
@@ -98,6 +104,7 @@ export class LocationPage implements OnDestroy {
     private placesService: PlacesService
   ) {}
 
+  /** Ajusta precisión, espera y antigüedad de la lectura según la plataforma. */
   private getPositionOptions() {
     const isNative = Capacitor.isNativePlatform();
 
@@ -108,6 +115,7 @@ export class LocationPage implements OnDestroy {
     };
   }
 
+  /** Limita la espera de una promesa; no cancela la solicitud de ubicación subyacente. */
   private withHardTimeout<T>(
     request: Promise<T>,
     milliseconds: number
@@ -134,6 +142,7 @@ export class LocationPage implements OnDestroy {
     });
   }
 
+  /** Recupera una lectura guardada con coordenadas válidas y antigüedad máxima de un día. */
   private restoreLastPosition(): boolean {
     try {
       const saved = localStorage.getItem(
@@ -160,6 +169,7 @@ export class LocationPage implements OnDestroy {
         return false;
       }
 
+      // Adapta los datos guardados al formato Position que utiliza updatePosition.
       const cachedPosition = {
         timestamp: data.timestamp,
         coords: {
@@ -184,6 +194,7 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  /** Solicita en segundo plano una lectura web más precisa y la aplica si mejora la actual. */
   private async refineWebPosition(): Promise<void> {
     try {
       const refinedPosition =
@@ -210,12 +221,15 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  // Espera a que la vista esté visible antes de crear o redimensionar el mapa.
   ionViewDidEnter(): void {
     setTimeout(() => this.initializeMap(), 150);
   }
 
+  /** Crea el mapa sobre República Dominicana y una capa separada para lugares cercanos. */
   private initializeMap(): void {
     if (this.map) {
+      // Recalcula el tamaño cuando se vuelve a una vista con un mapa ya creado.
       this.map.invalidateSize();
       return;
     }
@@ -238,7 +252,9 @@ export class LocationPage implements OnDestroy {
       L.layerGroup().addTo(this.map);
   }
 
+  /** En la app nativa, comprueba y solicita permiso de ubicación antes de usar el GPS. */
   private async verifyPermission(): Promise<void> {
+    // En web, el permiso se gestiona al solicitar la ubicación al navegador.
     if (!Capacitor.isNativePlatform()) {
       return;
     }
@@ -262,6 +278,7 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  /** Muestra la lectura guardada mientras solicita una ubicación actualizada. */
   async getCurrentLocation(): Promise<void> {
     const restoredPosition =
       this.restoreLastPosition();
@@ -297,6 +314,7 @@ export class LocationPage implements OnDestroy {
         // Intenta mejorar la lectura en segundo plano, sin mantener la interfaz cargando.
         void this.refineWebPosition();
       }
+    // Si falla la actualización, conserva la lectura que se pudo recuperar.
     } catch (error) {
       if (restoredPosition) {
         this.errorMessage =
@@ -311,6 +329,7 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  /** Alterna el seguimiento continuo y procesa las nuevas lecturas del GPS. */
   async toggleTracking(): Promise<void> {
     if (this.tracking) {
       await this.stopTracking();
@@ -332,6 +351,7 @@ export class LocationPage implements OnDestroy {
             interval: 5000
           },
           (position, error) => {
+            // Lleva el callback del plugin a Angular para actualizar los datos de la vista.
             this.ngZone.run(() => {
               if (error) {
                 this.showError(error);
@@ -342,6 +362,7 @@ export class LocationPage implements OnDestroy {
                 const previousAccuracy = this.accuracy;
                 const newAccuracy = position.coords.accuracy;
 
+                // En web, descarta lecturas que empeoran más de 25 metros y duplican el error anterior.
                 const isClearlyLessAccurate =
                   !Capacitor.isNativePlatform() &&
                   previousAccuracy !== null &&
@@ -372,6 +393,7 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  /** Cancela el observador GPS y restablece el estado de seguimiento. */
   async stopTracking(): Promise<void> {
     if (this.watchId) {
       await Geolocation.clearWatch({
@@ -387,6 +409,7 @@ export class LocationPage implements OnDestroy {
       'Seguimiento en tiempo real detenido.';
   }
 
+  /** Prepara un enlace con las coordenadas y abre el diálogo de compartir. */
   async shareLocation(): Promise<void> {
     if (
       this.latitude === null ||
@@ -418,6 +441,7 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  /** Consulta el servicio de búsqueda y controla el indicador de carga y sus errores. */
   async searchLocation(): Promise<void> {
     this.searching = true;
     this.errorMessage = '';
@@ -440,6 +464,7 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  /** Coloca o mueve el marcador de búsqueda y centra el mapa en el resultado elegido. */
   selectSearchResult(
     result: LocationSearchResult
   ): void {
@@ -471,6 +496,7 @@ export class LocationPage implements OnDestroy {
       `Ubicación encontrada: ${result.name}`;
   }
 
+  /** Obtiene una ubicación si hace falta y consulta los lugares de la categoría seleccionada. */
   async findNearbyPlaces(
     category: PlaceCategory =
       this.selectedCategory
@@ -516,6 +542,7 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  // Centra el mapa y abre la ventana del lugar seleccionado en la lista.
   focusPlace(place: NearbyPlace): void {
     const marker =
       this.placeMarkers.get(place.id);
@@ -528,6 +555,7 @@ export class LocationPage implements OnDestroy {
     marker?.openPopup();
   }
 
+  /** Reemplaza los marcadores de lugares y ajusta la vista para incluirlos junto al usuario. */
   private drawPlaces(): void {
     this.placesLayer?.clearLayers();
     this.placeMarkers.clear();
@@ -559,6 +587,7 @@ export class LocationPage implements OnDestroy {
           fillOpacity: 1
         });
 
+      // Escapa el texto externo antes de incorporarlo al contenido HTML de la ventana.
       marker.bindPopup(
         `<strong>${this.escapeHtml(
           place.name
@@ -590,6 +619,7 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  /** Actualiza la vista, guarda la lectura y mueve el marcador y el círculo de precisión. */
   private updatePosition(
     position: Position,
     centerMap: boolean
@@ -608,6 +638,7 @@ export class LocationPage implements OnDestroy {
         position.timestamp
       ).toLocaleTimeString();
 
+    // Conserva las coordenadas y su timestamp para recuperarlas en futuras solicitudes.
     localStorage.setItem(
       'petcare-last-location',
       JSON.stringify({
@@ -642,6 +673,7 @@ export class LocationPage implements OnDestroy {
       this.userMarker.setLatLng(coordinates);
     }
 
+    // El radio del círculo representa la precisión estimada por el proveedor, en metros.
     if (!this.accuracyCircle) {
       this.accuracyCircle =
         L.circle(coordinates, {
@@ -661,6 +693,7 @@ export class LocationPage implements OnDestroy {
       );
     }
 
+    // Centra la vista si se solicitó explícitamente o si el seguimiento está activo.
     if (centerMap || this.tracking) {
       this.map!.setView(
         coordinates,
@@ -669,6 +702,7 @@ export class LocationPage implements OnDestroy {
     }
   }
 
+  // Sustituye caracteres especiales para mostrar nombres y categorías como texto.
   private escapeHtml(value: string): string {
     return value.replace(
       /[&<>"']/g,
@@ -687,6 +721,7 @@ export class LocationPage implements OnDestroy {
     );
   }
 
+  // Registra el error y proporciona un mensaje visible para el usuario.
   private showError(error: unknown): void {
     console.error(
       'Error de localización:',
@@ -704,6 +739,7 @@ export class LocationPage implements OnDestroy {
     this.loading = false;
   }
 
+  // Detiene el seguimiento y libera el mapa al destruir el componente.
   ngOnDestroy(): void {
     void this.stopTracking();
     this.map?.remove();
