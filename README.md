@@ -4,6 +4,20 @@ Aplicación Ionic/Angular para gestionar usuarios, mascotas y sus cuidados. Incl
 
 La aplicación combina almacenamiento en el dispositivo con una API local para los registros de atención. El descubrimiento y la conexión BLE son reales; las métricas de la vista de sensores y las alertas iniciales son demostrativas.
 
+## Equipo de desarrollo
+
+El proyecto PetCare fue desarrollado de manera colaborativa por el Grupo C  2026-33 de la asignatura Programación de Dispositivos Móviles (ISW-307). Cada integrante asumió la responsabilidad principal de un módulo específico, manteniendo la integración dentro de un único repositorio central.
+
+| Integrante | Matrícula | Módulo asignado | Unidades |
+| --- | --- | --- | --- |
+| Henybel Vásquez Mendoza | 100074999 | Usuarios, mascotas y almacenamiento | U3, U9 |
+| Darlyn Giomal Francisco Peña | 100011821 | Geolocalización y conectividad | U4, U6 |
+| Flérida Ulerio Santos | 100022531 | Multimedia y cámara | U7, U8 |
+| Carlos Daniel Marte Duarte | 100056063 | Bluetooth/NFC y servicios web | U5, U10 |
+
+El trabajo se desarrolló de forma grupal en un repositorio común, pero cada integrante es responsable de la implementación, documentación y defensa técnica de su módulo asignado.
+
+
 ## Tecnologías y requisitos
 
 | Tecnología | Uso |
@@ -29,6 +43,14 @@ cd PetCare
 npm ci
 npm start
 ~~~
+Como alternativa para una instalación manual también puede utilizarse:
+
+~~~powershell
+npm install
+ionic serve
+~~~
+
+Para PetCare se recomienda `npm start`, ya que este comando inicia tanto la aplicación Angular como la API local utilizada por el proyecto.
 
 Si ya tienes el repositorio, ejecuta `npm ci` y `npm start` desde su carpeta. `npm ci` instala las versiones de `package-lock.json`.
 
